@@ -14,6 +14,24 @@ Gadget,South,5,99.95
 
 Tab-separated text copied from a spreadsheet works too.`;
 
+/** Extract a real file from a paste event's clipboard, if one is present.
+ *  Checks clipboardData.files first, then falls back to scanning items for a
+ *  kind === "file" entry (some browsers only expose pasted files there). */
+function fileFromClipboard(e) {
+  const cd = e.clipboardData;
+  if (!cd) return null;
+  if (cd.files && cd.files.length > 0) return cd.files[0];
+  if (cd.items) {
+    for (const item of cd.items) {
+      if (item.kind === "file") {
+        const f = item.getAsFile();
+        if (f) return f;
+      }
+    }
+  }
+  return null;
+}
+
 function Feature({ title, body }) {
   return (
     <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
@@ -102,20 +120,24 @@ export default function UploadLanding({ onLoaded }) {
     handleFile(e.dataTransfer.files?.[0]);
   }
 
-  // In file mode, let users paste a file straight from the clipboard (⌘/Ctrl+V)
-  // — e.g. a spreadsheet copied in Finder/Explorer — into the upload area.
+  // Anywhere on the upload page (including while the Paste-data textarea is
+  // focused), if the clipboard holds a FILE — e.g. a spreadsheet copied in
+  // Finder/Explorer — load the whole file through the upload pipeline rather
+  // than pasting its name as text. Plain text falls through to the default
+  // paste (so the textarea still receives pasted spreadsheet rows). This is the
+  // same heuristic Claude/ChatGPT use: prefer a real file over its text rep.
   useEffect(() => {
-    if (mode !== "file") return;
     function onPaste(e) {
-      const file = e.clipboardData?.files?.[0];
-      if (file && !busy) {
-        e.preventDefault();
-        handleFile(file);
-      }
+      if (busy) return;
+      const file = fileFromClipboard(e);
+      if (!file) return; // plain text -> let the textarea handle it
+      e.preventDefault();
+      setMode("file"); // surface the "Uploading & analyzing…" state
+      handleFile(file);
     }
     document.addEventListener("paste", onPaste);
     return () => document.removeEventListener("paste", onPaste);
-  }, [mode, busy]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [busy]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tabClass = (active) =>
     `rounded-md px-3 py-1.5 text-sm font-medium transition ${
@@ -200,7 +222,9 @@ export default function UploadLanding({ onLoaded }) {
             className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950/60 p-3 font-mono text-xs text-slate-100 placeholder:text-slate-600 focus:border-pulse-500 focus:outline-none focus:ring-1 focus:ring-pulse-500"
           />
           <div className="mt-3 flex items-center justify-between gap-3">
-            <p className="text-xs text-slate-500">CSV or tab-separated · up to {MAX_MB} MB</p>
+            <p className="text-xs text-slate-500">
+              CSV or tab-separated · up to {MAX_MB} MB · or paste a copied file (⌘/Ctrl+V)
+            </p>
             <button
               type="button"
               onClick={handlePaste}
