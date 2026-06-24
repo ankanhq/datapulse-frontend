@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchSummary } from "./api";
+import { API_BASE, fetchSummary } from "./api";
 import Layout from "./components/Layout";
 import Spinner from "./components/Spinner";
 import DataTable from "./components/DataTable";
@@ -27,8 +27,8 @@ export default function App() {
     <Layout>
       {isError && (
         <div className="mb-6 rounded-lg border border-red-900 bg-red-950/40 p-4 text-sm text-red-300">
-          Could not reach the DataPulse API: {error.message}. Is the backend running on{" "}
-          <code>http://localhost:8000</code>?
+          Could not reach the DataPulse API at <code>{API_BASE}</code>: {error.message}. Is the
+          backend running and is this origin allowed by its CORS configuration?
         </div>
       )}
 
