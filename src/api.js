@@ -42,6 +42,16 @@ export async function uploadDataset(file) {
   return handle(res);
 }
 
+/** Analyze pasted CSV / tab-separated text. Same shape as uploadDataset. */
+export async function pasteDataset(text, name) {
+  const res = await fetch(`${API_BASE}/datasets/text`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, name }),
+  });
+  return handle(res);
+}
+
 /** Load the bundled demo dataset. Same shape as uploadDataset. */
 export async function loadSampleDataset() {
   const res = await fetch(`${API_BASE}/datasets/sample`, { method: "POST" });

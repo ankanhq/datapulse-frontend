@@ -1,10 +1,18 @@
 import { useRef, useState } from "react";
-import { uploadDataset, loadSampleDataset, API_BASE } from "../api";
+import { uploadDataset, pasteDataset, loadSampleDataset, API_BASE } from "../api";
 import Spinner from "./Spinner";
 
-// Client-side guard mirroring the backend's limit, so oversized files fail
-// instantly with a friendly message instead of a wasted upload.
+// Client-side guard mirroring the backend's limit, so oversized input fails
+// instantly with a friendly message instead of a wasted request.
 const MAX_MB = 25;
+
+const PASTE_PLACEHOLDER = `Paste CSV or spreadsheet data here, e.g.
+
+product,region,units,revenue
+Widget,North,12,240.50
+Gadget,South,5,99.95
+
+Tab-separated text copied from a spreadsheet works too.`;
 
 function Feature({ title, body }) {
   return (
@@ -17,9 +25,23 @@ function Feature({ title, body }) {
 
 export default function UploadLanding({ onLoaded }) {
   const inputRef = useRef(null);
+  const [mode, setMode] = useState("file"); // "file" | "paste"
   const [dragging, setDragging] = useState(false);
-  const [busy, setBusy] = useState(null); // "upload" | "sample" | null
+  const [pasteText, setPasteText] = useState("");
+  const [busy, setBusy] = useState(null); // "upload" | "paste" | "sample" | null
   const [error, setError] = useState("");
+
+  // Shared error handling for every load path.
+  async function onLoad(fn) {
+    try {
+      return await fn();
+    } catch (e) {
+      setError(
+        `${e.message} (API: ${API_BASE}). The backend may be waking from sleep — try again in a moment.`
+      );
+      return null;
+    }
+  }
 
   async function handleFile(file) {
     setError("");
@@ -43,6 +65,25 @@ export default function UploadLanding({ onLoaded }) {
     }
   }
 
+  async function handlePaste() {
+    setError("");
+    if (!pasteText.trim()) {
+      setError("Paste some CSV or tab-separated text first.");
+      return;
+    }
+    if (new Blob([pasteText]).size > MAX_MB * 1024 * 1024) {
+      setError(`That's more than ${MAX_MB} MB of text — try a smaller sample or upload a file.`);
+      return;
+    }
+    setBusy("paste");
+    try {
+      const ds = await onLoad(() => pasteDataset(pasteText, "Pasted data"));
+      if (ds) onLoaded(ds);
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function handleSample() {
     setError("");
     setBusy("sample");
@@ -54,24 +95,17 @@ export default function UploadLanding({ onLoaded }) {
     }
   }
 
-  // Shared error handling for both upload paths.
-  async function onLoad(fn) {
-    try {
-      return await fn();
-    } catch (e) {
-      setError(
-        `${e.message} (API: ${API_BASE}). The backend may be waking from sleep — try again in a moment.`
-      );
-      return null;
-    }
-  }
-
   function onDrop(e) {
     e.preventDefault();
     setDragging(false);
     if (busy) return;
     handleFile(e.dataTransfer.files?.[0]);
   }
+
+  const tabClass = (active) =>
+    `rounded-md px-3 py-1.5 text-sm font-medium transition ${
+      active ? "bg-pulse-500 text-white" : "text-slate-300 hover:bg-slate-800"
+    }`;
 
   return (
     <div className="animate-fade-in mx-auto max-w-3xl">
@@ -80,51 +114,87 @@ export default function UploadLanding({ onLoaded }) {
           Explore any CSV, instantly
         </h2>
         <p className="mx-auto mt-2 max-w-xl text-sm text-slate-400">
-          Upload a spreadsheet and DataPulse detects your columns, then gives you live
-          summary stats, a sortable/filterable table, adaptive charts, and CSV export —
+          Upload or paste a spreadsheet and DataPulse detects your columns, then gives you
+          live summary stats, a sortable/filterable table, adaptive charts, and CSV export —
           no setup, no account.
         </p>
       </div>
 
-      {/* Drop zone */}
-      <div
-        onClick={() => !busy && inputRef.current?.click()}
-        onDragOver={(e) => {
-          e.preventDefault();
-          if (!busy) setDragging(true);
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={onDrop}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && !busy && inputRef.current?.click()}
-        className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed p-10 text-center transition ${
-          dragging
-            ? "border-pulse-500 bg-pulse-500/10"
-            : "border-slate-700 bg-slate-900/40 hover:border-slate-600 hover:bg-slate-900/70"
-        } ${busy ? "pointer-events-none opacity-60" : ""}`}
-      >
-        <input
-          ref={inputRef}
-          type="file"
-          accept=".csv,.tsv,.txt,text/csv"
-          className="hidden"
-          onChange={(e) => handleFile(e.target.files?.[0])}
-        />
-        {busy === "upload" ? (
-          <Spinner label="Uploading & analyzing…" />
-        ) : (
-          <>
-            <svg viewBox="0 0 24 24" className="mb-3 h-10 w-10 text-slate-500" fill="none" stroke="currentColor" strokeWidth="1.6">
-              <path d="M12 16V4m0 0L8 8m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <p className="text-sm font-medium text-slate-200">
-              Drag &amp; drop a CSV here, or <span className="text-pulse-400">browse</span>
-            </p>
-            <p className="mt-1 text-xs text-slate-500">Up to {MAX_MB} MB · .csv files</p>
-          </>
-        )}
+      {/* Mode toggle */}
+      <div className="mb-3 inline-flex gap-1 rounded-lg border border-slate-800 bg-slate-900/60 p-1">
+        <button type="button" className={tabClass(mode === "file")} onClick={() => { setMode("file"); setError(""); }}>
+          Upload file
+        </button>
+        <button type="button" className={tabClass(mode === "paste")} onClick={() => { setMode("paste"); setError(""); }}>
+          Paste data
+        </button>
       </div>
+
+      {mode === "file" ? (
+        /* Drop zone */
+        <div
+          onClick={() => !busy && inputRef.current?.click()}
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (!busy) setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={onDrop}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && !busy && inputRef.current?.click()}
+          className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed p-10 text-center transition ${
+            dragging
+              ? "border-pulse-500 bg-pulse-500/10"
+              : "border-slate-700 bg-slate-900/40 hover:border-slate-600 hover:bg-slate-900/70"
+          } ${busy ? "pointer-events-none opacity-60" : ""}`}
+        >
+          <input
+            ref={inputRef}
+            type="file"
+            accept=".csv,.tsv,.txt,text/csv"
+            className="hidden"
+            onChange={(e) => handleFile(e.target.files?.[0])}
+          />
+          {busy === "upload" ? (
+            <Spinner label="Uploading & analyzing…" />
+          ) : (
+            <>
+              <svg viewBox="0 0 24 24" className="mb-3 h-10 w-10 text-slate-500" fill="none" stroke="currentColor" strokeWidth="1.6">
+                <path d="M12 16V4m0 0L8 8m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <p className="text-sm font-medium text-slate-200">
+                Drag &amp; drop a CSV here, or <span className="text-pulse-400">browse</span>
+              </p>
+              <p className="mt-1 text-xs text-slate-500">Up to {MAX_MB} MB · .csv files</p>
+            </>
+          )}
+        </div>
+      ) : (
+        /* Paste box */
+        <div className="rounded-2xl border border-slate-700 bg-slate-900/40 p-4">
+          <textarea
+            value={pasteText}
+            onChange={(e) => setPasteText(e.target.value)}
+            disabled={busy === "paste"}
+            spellCheck={false}
+            rows={9}
+            placeholder={PASTE_PLACEHOLDER}
+            className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950/60 p-3 font-mono text-xs text-slate-100 placeholder:text-slate-600 focus:border-pulse-500 focus:outline-none focus:ring-1 focus:ring-pulse-500"
+          />
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <p className="text-xs text-slate-500">CSV or tab-separated · up to {MAX_MB} MB</p>
+            <button
+              type="button"
+              onClick={handlePaste}
+              disabled={!!busy}
+              className="inline-flex items-center gap-2 rounded-md bg-pulse-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-pulse-600 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {busy === "paste" ? <Spinner label="Analyzing…" /> : "Analyze pasted data"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="mt-4 rounded-lg border border-red-900 bg-red-950/40 p-3 text-sm text-red-300">
@@ -141,11 +211,7 @@ export default function UploadLanding({ onLoaded }) {
           disabled={!!busy}
           className="inline-flex items-center gap-2 rounded-md bg-pulse-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-pulse-600 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {busy === "sample" ? (
-            <Spinner label="Loading sample…" />
-          ) : (
-            "Try with sample data"
-          )}
+          {busy === "sample" ? <Spinner label="Loading sample…" /> : "Try with sample data"}
         </button>
       </div>
 
@@ -153,7 +219,7 @@ export default function UploadLanding({ onLoaded }) {
       <div className="mt-10 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Feature
           title="Auto-detected schema"
-          body="Numbers, dates, and text are inferred from your file — every feature adapts to your columns."
+          body="Numbers, dates, and text are inferred from your data — every feature adapts to your columns."
         />
         <Feature
           title="Charts that fit your data"
@@ -161,7 +227,7 @@ export default function UploadLanding({ onLoaded }) {
         />
         <Feature
           title="Private by design"
-          body="Your file is processed in memory and never stored permanently. Old datasets are evicted automatically."
+          body="Your data is processed in memory and never stored permanently. Old datasets are evicted automatically."
         />
       </div>
     </div>
