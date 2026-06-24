@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { uploadDataset, pasteDataset, loadSampleDataset, API_BASE } from "../api";
 import Spinner from "./Spinner";
 
@@ -46,8 +46,8 @@ export default function UploadLanding({ onLoaded }) {
   async function handleFile(file) {
     setError("");
     if (!file) return;
-    if (!/\.(csv|tsv|txt)$/i.test(file.name)) {
-      setError("Please choose a .csv file.");
+    if (!/\.(csv|tsv|txt|xlsx|xls)$/i.test(file.name)) {
+      setError("Please choose a CSV or Excel file (.csv, .xlsx, .xls).");
       return;
     }
     if (file.size > MAX_MB * 1024 * 1024) {
@@ -102,6 +102,21 @@ export default function UploadLanding({ onLoaded }) {
     handleFile(e.dataTransfer.files?.[0]);
   }
 
+  // In file mode, let users paste a file straight from the clipboard (⌘/Ctrl+V)
+  // — e.g. a spreadsheet copied in Finder/Explorer — into the upload area.
+  useEffect(() => {
+    if (mode !== "file") return;
+    function onPaste(e) {
+      const file = e.clipboardData?.files?.[0];
+      if (file && !busy) {
+        e.preventDefault();
+        handleFile(file);
+      }
+    }
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, [mode, busy]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const tabClass = (active) =>
     `rounded-md px-3 py-1.5 text-sm font-medium transition ${
       active ? "bg-pulse-500 text-white" : "text-slate-300 hover:bg-slate-800"
@@ -111,12 +126,12 @@ export default function UploadLanding({ onLoaded }) {
     <div className="animate-fade-in mx-auto max-w-3xl">
       <div className="mb-6 text-center">
         <h2 className="text-2xl font-semibold tracking-tight text-slate-100 sm:text-3xl">
-          Explore any CSV, instantly
+          Explore any spreadsheet, instantly
         </h2>
         <p className="mx-auto mt-2 max-w-xl text-sm text-slate-400">
-          Upload or paste a spreadsheet and DataPulse detects your columns, then gives you
-          live summary stats, a sortable/filterable table, adaptive charts, and CSV export —
-          no setup, no account.
+          Upload or paste a CSV or Excel file and DataPulse detects your columns, then gives
+          you live summary stats, a sortable/filterable table, adaptive charts, and CSV
+          export — no setup, no account.
         </p>
       </div>
 
@@ -152,7 +167,7 @@ export default function UploadLanding({ onLoaded }) {
           <input
             ref={inputRef}
             type="file"
-            accept=".csv,.tsv,.txt,text/csv"
+            accept=".csv,.tsv,.txt,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
             className="hidden"
             onChange={(e) => handleFile(e.target.files?.[0])}
           />
@@ -164,9 +179,11 @@ export default function UploadLanding({ onLoaded }) {
                 <path d="M12 16V4m0 0L8 8m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               <p className="text-sm font-medium text-slate-200">
-                Drag &amp; drop a CSV here, or <span className="text-pulse-400">browse</span>
+                Drag &amp; drop a CSV or Excel file here, or <span className="text-pulse-400">browse</span>
               </p>
-              <p className="mt-1 text-xs text-slate-500">Up to {MAX_MB} MB · .csv files</p>
+              <p className="mt-1 text-xs text-slate-500">
+                Up to {MAX_MB} MB · CSV or Excel (.csv, .xlsx, .xls) · or paste a file with ⌘/Ctrl+V
+              </p>
             </>
           )}
         </div>
