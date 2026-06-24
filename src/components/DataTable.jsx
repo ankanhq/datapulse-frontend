@@ -4,39 +4,63 @@ import { fetchQuery, exportUrl } from "../api";
 import Spinner from "./Spinner";
 
 const PAGE_SIZE = 50;
-const SORTABLE = ["id", "timestamp", "value"];
-// Above this, exporting is a heavy download, so confirm first.
-const EXPORT_CONFIRM_THRESHOLD = 1_000_000;
+
+// Operators offered per column type, with friendly labels. Values are sent to
+// the backend, which validates them against the same per-type allow-list.
+const OPS = {
+  number: [
+    { op: "eq", label: "=" },
+    { op: "neq", label: "≠" },
+    { op: "gte", label: "≥" },
+    { op: "lte", label: "≤" },
+  ],
+  date: [
+    { op: "gte", label: "on/after" },
+    { op: "lte", label: "on/before" },
+  ],
+  text: [
+    { op: "contains", label: "contains" },
+    { op: "eq", label: "equals" },
+    { op: "neq", label: "≠" },
+  ],
+};
+const OP_LABEL = Object.fromEntries(
+  Object.values(OPS).flat().map((o) => [o.op, o.label])
+);
 
 const inputClass =
   "rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100 " +
   "placeholder:text-slate-500 focus:border-pulse-500 focus:outline-none focus:ring-1 focus:ring-pulse-500";
 
-export default function DataTable({ categories = [] }) {
+function inputTypeFor(type) {
+  if (type === "number") return "number";
+  if (type === "date") return "date";
+  return "text";
+}
+
+export default function DataTable({ datasetId, columns }) {
   const [page, setPage] = useState(1);
-  const [sortBy, setSortBy] = useState("id");
+  const [sortBy, setSortBy] = useState("");
   const [sortOrder, setSortOrder] = useState("asc");
-  // Draft filters (form inputs) vs applied filters (sent to backend).
-  const [draft, setDraft] = useState({
-    category: "",
-    min_value: "",
-    max_value: "",
-    start_date: "",
-    end_date: "",
-  });
-  const [filters, setFilters] = useState(draft);
+  const [filters, setFilters] = useState([]); // applied: [{col, op, value}]
+
+  // Draft filter being composed.
+  const [draftCol, setDraftCol] = useState(columns[0]?.name ?? "");
+  const draftColType = columns.find((c) => c.name === draftCol)?.type ?? "text";
+  const [draftOp, setDraftOp] = useState(OPS[draftColType][0].op);
+  const [draftVal, setDraftVal] = useState("");
 
   const params = {
     page,
     page_size: PAGE_SIZE,
     sort_by: sortBy,
     sort_order: sortOrder,
-    ...filters,
+    filters: filters.length ? JSON.stringify(filters) : undefined,
   };
 
   const { data, isLoading, isError, error, isFetching } = useQuery({
-    queryKey: ["query", params],
-    queryFn: () => fetchQuery(params),
+    queryKey: ["query", datasetId, params],
+    queryFn: () => fetchQuery(datasetId, params),
     placeholderData: keepPreviousData,
   });
 
@@ -44,54 +68,42 @@ export default function DataTable({ categories = [] }) {
   const totalCount = data?.total_count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
-  function toggleSort(column) {
-    if (!SORTABLE.includes(column)) return;
-    if (sortBy === column) {
+  function toggleSort(col) {
+    if (sortBy === col) {
       setSortOrder((o) => (o === "asc" ? "desc" : "asc"));
     } else {
-      setSortBy(column);
+      setSortBy(col);
       setSortOrder("asc");
     }
     setPage(1);
   }
 
-  function applyFilters(e) {
+  function pickDraftCol(name) {
+    setDraftCol(name);
+    const t = columns.find((c) => c.name === name)?.type ?? "text";
+    setDraftOp(OPS[t][0].op); // reset operator to a valid one for the new type
+    setDraftVal("");
+  }
+
+  function addFilter(e) {
     e.preventDefault();
-    setFilters(draft);
+    if (draftVal === "") return;
+    setFilters((f) => [...f, { col: draftCol, op: draftOp, value: draftVal }]);
+    setDraftVal("");
     setPage(1);
   }
 
-  function resetFilters() {
-    const cleared = {
-      category: "",
-      min_value: "",
-      max_value: "",
-      start_date: "",
-      end_date: "",
-    };
-    setDraft(cleared);
-    setFilters(cleared);
+  function removeFilter(i) {
+    setFilters((f) => f.filter((_, idx) => idx !== i));
     setPage(1);
   }
 
   function handleExport() {
-    // Export the whole filtered+sorted set (same filters as the table),
-    // independent of the current page. Large sets confirm first.
-    if (
-      totalCount > EXPORT_CONFIRM_THRESHOLD &&
-      !window.confirm(
-        `This will export ${totalCount.toLocaleString()} rows as CSV, which may ` +
-          `be a large download. Continue?`
-      )
-    ) {
-      return;
-    }
-    const url = exportUrl({
+    const url = exportUrl(datasetId, {
       sort_by: sortBy,
       sort_order: sortOrder,
-      ...filters,
+      filters: filters.length ? JSON.stringify(filters) : undefined,
     });
-    // Direct browser navigation streams straight to disk (no JS buffering).
     const a = document.createElement("a");
     a.href = url;
     a.download = "datapulse_export.csv";
@@ -100,10 +112,8 @@ export default function DataTable({ categories = [] }) {
     a.remove();
   }
 
-  const columns = rows.length ? Object.keys(rows[0]) : ["id", "timestamp", "value", "category", "region"];
-
   function sortIndicator(col) {
-    if (sortBy !== col) return SORTABLE.includes(col) ? " ↕" : "";
+    if (sortBy !== col) return " ↕";
     return sortOrder === "asc" ? " ↑" : " ↓";
   }
 
@@ -118,7 +128,7 @@ export default function DataTable({ categories = [] }) {
           type="button"
           onClick={handleExport}
           disabled={totalCount === 0}
-          title="Download the current filtered & sorted result set as CSV"
+          title="Download the current filtered & sorted view as CSV"
           className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-100 transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
@@ -128,67 +138,71 @@ export default function DataTable({ categories = [] }) {
         </button>
       </div>
 
-      {/* Filters */}
-      <form
-        onSubmit={applyFilters}
-        className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6"
-      >
-        <select
-          className={inputClass}
-          value={draft.category}
-          onChange={(e) => setDraft({ ...draft, category: e.target.value })}
-        >
-          <option value="">All categories</option>
-          {categories.map((c) => (
-            <option key={c} value={c}>
-              {c}
+      {/* Filter builder */}
+      <form onSubmit={addFilter} className="mb-3 flex flex-wrap items-center gap-2">
+        <select className={inputClass} value={draftCol} onChange={(e) => pickDraftCol(e.target.value)}>
+          {columns.map((c) => (
+            <option key={c.name} value={c.name}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+        <select className={inputClass} value={draftOp} onChange={(e) => setDraftOp(e.target.value)}>
+          {OPS[draftColType].map((o) => (
+            <option key={o.op} value={o.op}>
+              {o.label}
             </option>
           ))}
         </select>
         <input
           className={inputClass}
-          type="number"
-          step="0.01"
-          placeholder="Min value"
-          value={draft.min_value}
-          onChange={(e) => setDraft({ ...draft, min_value: e.target.value })}
+          type={inputTypeFor(draftColType)}
+          step={draftColType === "number" ? "any" : undefined}
+          placeholder="value"
+          value={draftVal}
+          onChange={(e) => setDraftVal(e.target.value)}
         />
-        <input
-          className={inputClass}
-          type="number"
-          step="0.01"
-          placeholder="Max value"
-          value={draft.max_value}
-          onChange={(e) => setDraft({ ...draft, max_value: e.target.value })}
-        />
-        <input
-          className={inputClass}
-          type="datetime-local"
-          value={draft.start_date}
-          onChange={(e) => setDraft({ ...draft, start_date: e.target.value })}
-        />
-        <input
-          className={inputClass}
-          type="datetime-local"
-          value={draft.end_date}
-          onChange={(e) => setDraft({ ...draft, end_date: e.target.value })}
-        />
-        <div className="flex gap-2">
-          <button
-            type="submit"
-            className="flex-1 rounded-md bg-pulse-500 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-pulse-600"
-          >
-            Apply
-          </button>
+        <button
+          type="submit"
+          className="rounded-md bg-pulse-500 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-pulse-600"
+        >
+          Add filter
+        </button>
+      </form>
+
+      {/* Active filters */}
+      {filters.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          {filters.map((f, i) => (
+            <span
+              key={i}
+              className="inline-flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs text-slate-200"
+            >
+              <span className="font-medium">{f.col}</span>
+              <span className="text-slate-400">{OP_LABEL[f.op] || f.op}</span>
+              <span>{String(f.value)}</span>
+              <button
+                type="button"
+                onClick={() => removeFilter(i)}
+                className="ml-0.5 text-slate-500 hover:text-red-400"
+                aria-label="Remove filter"
+              >
+                ×
+              </button>
+            </span>
+          ))}
           <button
             type="button"
-            onClick={resetFilters}
-            className="rounded-md border border-slate-700 px-3 py-1.5 text-sm text-slate-300 transition hover:bg-slate-800"
+            onClick={() => {
+              setFilters([]);
+              setPage(1);
+            }}
+            className="text-xs text-slate-400 underline-offset-2 hover:text-slate-200 hover:underline"
           >
-            Reset
+            Clear all
           </button>
         </div>
-      </form>
+      )}
 
       {/* Table */}
       <div className="relative overflow-x-auto rounded-lg border border-slate-800">
@@ -204,14 +218,13 @@ export default function DataTable({ categories = [] }) {
               <tr>
                 {columns.map((col) => (
                   <th
-                    key={col}
-                    onClick={() => toggleSort(col)}
-                    className={`px-4 py-2.5 font-medium ${
-                      SORTABLE.includes(col) ? "cursor-pointer select-none hover:text-slate-200" : ""
-                    }`}
+                    key={col.name}
+                    onClick={() => toggleSort(col.name)}
+                    className="cursor-pointer select-none px-4 py-2.5 font-medium hover:text-slate-200"
+                    title="Click to sort"
                   >
-                    {col}
-                    <span className="text-pulse-400">{sortIndicator(col)}</span>
+                    {col.name}
+                    <span className="text-pulse-400">{sortIndicator(col.name)}</span>
                   </th>
                 ))}
               </tr>
@@ -219,14 +232,23 @@ export default function DataTable({ categories = [] }) {
             <tbody>
               {rows.map((row, i) => (
                 <tr
-                  key={row.id ?? i}
+                  key={i}
                   className="border-t border-slate-800 odd:bg-slate-900/40 hover:bg-slate-800/60"
                 >
-                  {columns.map((col) => (
-                    <td key={col} className="whitespace-nowrap px-4 py-2 text-slate-200">
-                      {typeof row[col] === "number" ? row[col].toLocaleString() : String(row[col])}
-                    </td>
-                  ))}
+                  {columns.map((col) => {
+                    const v = row[col.name];
+                    return (
+                      <td key={col.name} className="whitespace-nowrap px-4 py-2 text-slate-200">
+                        {v === null || v === undefined ? (
+                          <span className="text-slate-600">—</span>
+                        ) : typeof v === "number" ? (
+                          v.toLocaleString()
+                        ) : (
+                          String(v)
+                        )}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
               {rows.length === 0 && (

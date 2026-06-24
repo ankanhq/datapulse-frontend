@@ -1,65 +1,68 @@
-import { useQuery } from "@tanstack/react-query";
-import { API_BASE, fetchSummary } from "./api";
+import { useState } from "react";
 import Layout from "./components/Layout";
-import Spinner from "./components/Spinner";
+import UploadLanding from "./components/UploadLanding";
+import SummaryPanel from "./components/SummaryPanel";
 import DataTable from "./components/DataTable";
-import ValueOverTimeChart from "./components/ValueOverTimeChart";
-import CategoryDistributionChart from "./components/CategoryDistributionChart";
-
-function StatCard({ label, value }) {
-  return (
-    <div className="animate-fade-in rounded-xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5">
-      <p className="text-xs uppercase tracking-wide text-slate-400">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-slate-50 sm:text-3xl">{value}</p>
-    </div>
-  );
-}
+import AdaptiveChart from "./components/AdaptiveChart";
 
 export default function App() {
-  const { data: summary, isLoading, isError, error } = useQuery({
-    queryKey: ["summary"],
-    queryFn: fetchSummary,
-  });
+  // The active dataset: { dataset_id, name, source, row_count, columns } | null.
+  const [dataset, setDataset] = useState(null);
 
-  const categories = summary?.unique_categories ?? [];
+  if (!dataset) {
+    return (
+      <Layout>
+        <UploadLanding onLoaded={setDataset} />
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
-      {isError && (
-        <div className="mb-6 rounded-lg border border-red-900 bg-red-950/40 p-4 text-sm text-red-300">
-          Could not reach the DataPulse API at <code>{API_BASE}</code>: {error.message}. Is the
-          backend running and is this origin allowed by its CORS configuration?
+      {/* Active dataset bar */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-slate-100" title={dataset.name}>
+            {dataset.name}
+            {dataset.source === "sample" && (
+              <span className="ml-2 rounded bg-pulse-500/15 px-1.5 py-0.5 text-[10px] uppercase text-pulse-400">
+                sample
+              </span>
+            )}
+          </p>
+          <p className="text-xs text-slate-400">
+            {dataset.row_count.toLocaleString()} rows · {dataset.columns.length} columns
+          </p>
         </div>
-      )}
-
-      {isLoading ? (
-        <Spinner label="Loading summary…" className="mb-6" />
-      ) : (
-        summary && (
-          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <StatCard label="Total rows" value={summary.total_rows.toLocaleString()} />
-            <StatCard label="Average value" value={summary.avg_value?.toFixed(2)} />
-            <StatCard label="Categories" value={categories.length} />
-          </div>
-        )
-      )}
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <ValueOverTimeChart
-            categories={categories}
-            minTimestamp={summary?.min_timestamp}
-            maxTimestamp={summary?.max_timestamp}
-          />
-        </div>
-        <div className="lg:col-span-1">
-          <CategoryDistributionChart />
-        </div>
+        <button
+          type="button"
+          onClick={() => setDataset(null)}
+          className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-100 transition hover:bg-slate-700"
+        >
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          New upload
+        </button>
       </div>
 
-      <div className="mt-4">
-        <DataTable categories={categories} />
+      {/* Everything below is keyed by dataset id so state resets cleanly between
+          uploads (page/sort/filter/selected column don't leak across datasets). */}
+      <SummaryPanel key={`sum-${dataset.dataset_id}`} datasetId={dataset.dataset_id} />
+
+      <div className="mb-6">
+        <AdaptiveChart
+          key={`chart-${dataset.dataset_id}`}
+          datasetId={dataset.dataset_id}
+          columns={dataset.columns}
+        />
       </div>
+
+      <DataTable
+        key={`table-${dataset.dataset_id}`}
+        datasetId={dataset.dataset_id}
+        columns={dataset.columns}
+      />
     </Layout>
   );
 }
