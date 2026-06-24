@@ -13,7 +13,7 @@ export default function Layout({ children }) {
             <h1 className="text-lg font-semibold tracking-tight sm:text-xl">
               DataPulse Analytics
             </h1>
-            <p className="text-xs text-slate-400">Local analytics over millions of rows</p>
+            <p className="text-xs text-slate-400">Upload a CSV and explore it instantly</p>
           </div>
         </div>
       </header>
