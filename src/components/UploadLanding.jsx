@@ -124,8 +124,8 @@ export default function UploadLanding({ onLoaded }) {
   // focused), if the clipboard holds a FILE — e.g. a spreadsheet copied in
   // Finder/Explorer — load the whole file through the upload pipeline rather
   // than pasting its name as text. Plain text falls through to the default
-  // paste (so the textarea still receives pasted spreadsheet rows). This is the
-  // same heuristic Claude/ChatGPT use: prefer a real file over its text rep.
+  // paste (so the textarea still receives pasted spreadsheet rows). When both
+  // a file and its text representation are present, prefer the real file.
   useEffect(() => {
     function onPaste(e) {
       if (busy) return;

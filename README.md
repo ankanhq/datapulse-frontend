@@ -1,38 +1,75 @@
 # DataPulse — Frontend
 
-React + Vite + Tailwind CSS + Chart.js dashboard for the DataPulse backend.
-Fetches via TanStack Query (react-query).
+Upload or paste a spreadsheet and get instant analytics in the browser.
+**Live:** https://datapulse-frontend.vercel.app
+
+![DataPulse](screenshot.png)
+
+This is the React app. The [backend](https://github.com/ankanhq/datapulse) is a
+separate FastAPI + DuckDB service.
+
+## What it does
+
+Drop in a CSV or Excel file — or paste spreadsheet text, or paste a file straight
+from the clipboard (like you would in a chat app) — and DataPulse detects your
+columns and renders a live dashboard:
+
+- **Auto-detected schema** — each column is typed as number, date, or text, and
+  the whole UI adapts to it.
+- **Summary panel** — total rows/columns plus per-column basics.
+- **Data Explorer** — a paginated table with click-to-sort headers and a filter
+  builder whose operators change with the column type.
+- **Adaptive chart** — pick any column; text columns get category counts, date
+  columns get a time series (with count/avg/sum), number columns get a histogram.
+- **CSV export** of the current filtered + sorted view.
+
+There's a "Try with sample data" button so the dashboard works on first visit,
+and everything is free with no signup. Files are capped at 25 MB and are never
+stored — they're processed in memory by the backend and evicted automatically.
+
+## Tech stack
+
+- **React + Vite** — app and build tooling
+- **Tailwind CSS** — styling
+- **Chart.js** (via react-chartjs-2) — charts
+- **TanStack Query** — data fetching and caching
 
 ## Setup
 
 ```bash
-cd datapulse-frontend
 npm install
 npm run dev      # http://localhost:5173
 ```
 
-The backend is expected at `http://localhost:8000`. Override with an env var:
+The app reads the backend URL from `VITE_API_BASE`, defaulting to
+`http://localhost:8000`. Point it elsewhere with an env var:
 
 ```bash
 VITE_API_BASE=http://localhost:9000 npm run dev
 ```
 
-## What's here
+For production builds (e.g. on Vercel), set `VITE_API_BASE` to the deployed
+backend URL — it's baked into the bundle at build time. See `.env.example`.
+
+```bash
+npm run build    # outputs to dist/
+npm run preview  # serve the production build locally
+```
+
+## Project structure
 
 | File | Purpose |
 |------|---------|
-| `src/api.js` | Typed-ish fetch helpers for `/data/summary`, `/data/query`, `/data/chart` |
-| `src/components/Layout.jsx` | App shell (header / main / footer) |
-| `src/App.jsx` | Summary stat cards + dashboard grid |
-| `src/components/DataTable.jsx` | Paginated, sortable, filterable table |
-| `src/components/ValueOverTimeChart.jsx` | Line chart with interval + category controls |
-| `src/components/CategoryDistributionChart.jsx` | Doughnut chart with date-range filter |
+| `src/api.js` | Dataset-scoped client: upload, paste, sample, summary, query, chart, export |
+| `src/App.jsx` | Switches between the upload landing and the dashboard for the active dataset |
+| `src/components/UploadLanding.jsx` | Empty state: drag-and-drop upload, paste box, clipboard-file paste, sample button |
+| `src/components/SummaryPanel.jsx` | Stat cards and per-column stats |
+| `src/components/DataTable.jsx` | Paginated, sortable table with a per-type filter builder and CSV export |
+| `src/components/AdaptiveChart.jsx` | Column picker + a chart that adapts to the column's type |
+| `src/components/Layout.jsx` | App shell |
 | `src/components/Spinner.jsx` | Loading indicator |
 
-## Notes
+## Deployment
 
-- Tailwind **v3** (directive-based config) to match the project guide.
-- Sorting is restricted to `id`, `timestamp`, `value` (the columns the backend
-  allows). Clicking those headers toggles asc/desc.
-- Filters are applied on submit (not on every keystroke) to avoid hammering the
-  backend; react-query keeps previous data on screen during refetch.
+The backend repo's [DEPLOY.md](https://github.com/ankanhq/datapulse/blob/main/DEPLOY.md)
+covers deploying this frontend to Vercel alongside the backend on Render.
