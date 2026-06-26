@@ -102,9 +102,10 @@ export async function downloadReport({ datasetName, summary, chartConfig }) {
   // The chart follows the column list, but never lower than maxChartTop, so it
   // always fits on the single page regardless of how many columns there are.
   const chartTargetW = contentW;
-  const chartTargetH = 218;
+  const chartTargetH = 204;
+  const chartHeadingH = 18;
   const captionH = 16;
-  const maxChartTop = pageH - margin - chartTargetH - captionH;
+  const maxChartTop = pageH - margin - chartHeadingH - chartTargetH - captionH;
 
   // ---- Columns section (capped so everything stays on one page) ----
   doc.setFont("helvetica", "bold");
@@ -146,6 +147,12 @@ export async function downloadReport({ datasetName, summary, chartConfig }) {
 
   const chartY = Math.min(y + 20, maxChartTop);
 
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.setTextColor(...SLATE_900);
+  const chartTitle = doc.splitTextToSize(chartConfig.title || "Current chart", contentW)[0];
+  doc.text(chartTitle, margin, chartY);
+
   // ---- Chart (rendered on white at high res, then placed) ----
   const canvas = await renderChartToCanvas({
     ...chartConfig,
@@ -159,7 +166,7 @@ export async function downloadReport({ datasetName, summary, chartConfig }) {
     canvas.toDataURL("image/png"),
     "PNG",
     margin,
-    chartY,
+    chartY + chartHeadingH,
     chartTargetW,
     drawH,
     undefined,

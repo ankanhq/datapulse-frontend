@@ -280,6 +280,7 @@ export default function AdaptiveChart({ datasetId, datasetName, columns }) {
             onChange={(e) => setTitle(e.target.value)}
             placeholder={defaultTitle || "Chart title"}
             title="Optional title shown at the top of the exported image"
+            aria-label="Export chart title"
             className={`${inputClass} min-w-0 flex-1 sm:max-w-xs`}
             disabled={!hasChart}
           />
@@ -288,6 +289,7 @@ export default function AdaptiveChart({ datasetId, datasetName, columns }) {
             onClick={onExportPng}
             disabled={!hasChart || !!busy}
             title="Download the chart as a high-resolution PNG on a white background"
+            aria-label="Export chart as PNG"
             className={btnClass}
           >
             <ImgIcon />
@@ -298,6 +300,7 @@ export default function AdaptiveChart({ datasetId, datasetName, columns }) {
             onClick={onCopy}
             disabled={!hasChart || !!busy}
             title="Copy the chart image to the clipboard for pasting into slides/docs"
+            aria-label="Copy chart image to clipboard"
             className={btnClass}
           >
             <CopyIcon />
@@ -308,6 +311,7 @@ export default function AdaptiveChart({ datasetId, datasetName, columns }) {
             onClick={onReport}
             disabled={!hasChart || !summary || !!busy}
             title="Download a one-page PDF report (stats + chart) on a white background"
+            aria-label="Download one-page PDF report"
             className="inline-flex items-center gap-1.5 rounded-md bg-pulse-500 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-pulse-600 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <DocIcon />

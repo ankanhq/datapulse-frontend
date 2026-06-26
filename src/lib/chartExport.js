@@ -142,7 +142,7 @@ function triggerDownload(href, filename, revoke) {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  if (revoke) URL.revokeObjectURL(href);
+  if (revoke) setTimeout(() => URL.revokeObjectURL(href), 0);
 }
 
 /** Download the current chart as a high-resolution PNG. */
