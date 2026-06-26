@@ -14,7 +14,14 @@ const FONT_STACK =
 
 // Light-theme Chart.js options so the export reads well on white. Font sizes are
 // the *base* sizes; renderChartToCanvas scales them up for the hi-res canvas.
-function lightOptions(type) {
+function tickLimit(labelCount) {
+  if (labelCount <= 8) return Math.max(labelCount, 2);
+  if (labelCount <= 24) return 8;
+  if (labelCount <= 80) return 7;
+  return 6;
+}
+
+function lightOptions(type, labelCount = 0) {
   const text = "#1e293b"; // slate-800
   const sub = "#475569"; // slate-600
   const grid = "rgba(15,23,42,0.08)";
@@ -33,10 +40,48 @@ function lightOptions(type) {
   }
 
   base.scales = {
-    x: { ticks: { color: sub, font: { size: 12 }, maxTicksLimit: 14 }, grid: { color: grid } },
+    x: {
+      ticks: {
+        autoSkip: true,
+        color: sub,
+        font: { size: labelCount > 40 ? 11 : 12 },
+        maxRotation: 0,
+        maxTicksLimit: tickLimit(labelCount),
+        minRotation: 0,
+      },
+      grid: { color: grid },
+    },
     y: { ticks: { color: sub, font: { size: 12 } }, grid: { color: grid } },
   };
   return base;
+}
+
+function dateFormatter(labels) {
+  const dates = labels
+    .map((value) => new Date(value))
+    .filter((d) => !Number.isNaN(d.getTime()))
+    .sort((a, b) => a - b);
+  if (dates.length < 2) return new Intl.DateTimeFormat(undefined, { month: "short", day: "2-digit" });
+
+  const spanDays = (dates[dates.length - 1] - dates[0]) / 86_400_000;
+  if (spanDays > 370) return new Intl.DateTimeFormat(undefined, { month: "short", year: "numeric" });
+  if (spanDays > 45) return new Intl.DateTimeFormat(undefined, { month: "short", day: "2-digit" });
+  return new Intl.DateTimeFormat(undefined, { month: "short", day: "2-digit" });
+}
+
+function compactDateLabel(value, formatter) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return formatter.format(d);
+}
+
+function formatLabelsForExport(data, labelFormat) {
+  if (labelFormat !== "date") return data;
+  const formatter = dateFormatter(data.labels);
+  return {
+    ...data,
+    labels: data.labels.map((label) => compactDateLabel(label, formatter)),
+  };
 }
 
 function scaleFonts(opts, scale) {
@@ -73,6 +118,7 @@ export async function renderChartToCanvas({
   type,
   data,
   title,
+  labelFormat,
   scale = 2,
   width = 880,
   height = 460,
@@ -91,12 +137,13 @@ export async function renderChartToCanvas({
   chartCanvas.width = chartW;
   chartCanvas.height = chartH;
 
-  const opts = lightOptions(type);
+  const exportData = formatLabelsForExport(data, labelFormat);
+  const opts = lightOptions(type, exportData.labels?.length || 0);
   scaleFonts(opts, scale);
 
   const chart = new Chart(chartCanvas.getContext("2d"), {
     type,
-    data: recolorForLight(type, data, scale),
+    data: recolorForLight(type, exportData, scale),
     options: opts,
   });
   // animation:false renders synchronously, but wait a frame to be safe.
