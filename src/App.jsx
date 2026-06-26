@@ -1,9 +1,21 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import Layout from "./components/Layout";
 import UploadLanding from "./components/UploadLanding";
-import SummaryPanel from "./components/SummaryPanel";
-import DataTable from "./components/DataTable";
-import AdaptiveChart from "./components/AdaptiveChart";
+import Spinner from "./components/Spinner";
+
+const loadSummaryPanel = () => import("./components/SummaryPanel");
+const loadAdaptiveChart = () => import("./components/AdaptiveChart");
+const loadDataTable = () => import("./components/DataTable");
+
+const SummaryPanel = lazy(loadSummaryPanel);
+const AdaptiveChart = lazy(loadAdaptiveChart);
+const DataTable = lazy(loadDataTable);
+
+function preloadDashboard() {
+  loadSummaryPanel();
+  loadAdaptiveChart();
+  loadDataTable();
+}
 
 export default function App() {
   // The active dataset: { dataset_id, name, source, row_count, columns } | null.
@@ -12,7 +24,7 @@ export default function App() {
   if (!dataset) {
     return (
       <Layout>
-        <UploadLanding onLoaded={setDataset} />
+        <UploadLanding onLoaded={setDataset} onPrepareDashboard={preloadDashboard} />
       </Layout>
     );
   }
@@ -48,22 +60,24 @@ export default function App() {
 
       {/* Everything below is keyed by dataset id so state resets cleanly between
           uploads (page/sort/filter/selected column don't leak across datasets). */}
-      <SummaryPanel key={`sum-${dataset.dataset_id}`} datasetId={dataset.dataset_id} />
+      <Suspense fallback={<Spinner label="Loading dashboard…" className="mb-6" />}>
+        <SummaryPanel key={`sum-${dataset.dataset_id}`} datasetId={dataset.dataset_id} />
 
-      <div className="mb-6">
-        <AdaptiveChart
-          key={`chart-${dataset.dataset_id}`}
+        <div className="mb-6">
+          <AdaptiveChart
+            key={`chart-${dataset.dataset_id}`}
+            datasetId={dataset.dataset_id}
+            datasetName={dataset.name}
+            columns={dataset.columns}
+          />
+        </div>
+
+        <DataTable
+          key={`table-${dataset.dataset_id}`}
           datasetId={dataset.dataset_id}
-          datasetName={dataset.name}
           columns={dataset.columns}
         />
-      </div>
-
-      <DataTable
-        key={`table-${dataset.dataset_id}`}
-        datasetId={dataset.dataset_id}
-        columns={dataset.columns}
-      />
+      </Suspense>
     </Layout>
   );
 }
