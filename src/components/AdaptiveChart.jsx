@@ -37,6 +37,16 @@ const AXIS = {
   },
 };
 
+const AGG_LABEL = { avg: "Average", sum: "Total", count: "Count", min: "Minimum", max: "Maximum" };
+
+function prettyName(name) {
+  return String(name || "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
 // The chart kind is decided by the selected column's type.
 function chartTypeFor(colType) {
   if (colType === "date") return "time_series";
@@ -96,8 +106,8 @@ export default function AdaptiveChart({ datasetId, datasetName, columns }) {
 
   if (chartType === "time_series") {
     chartJsType = "line";
-    const series = agg === "count" ? "Count" : `${agg}(${yColumn})`;
-    defaultTitle = `${series} over ${column}`;
+    const series = agg === "count" ? "Count" : `${AGG_LABEL[agg]} ${prettyName(yColumn)}`;
+    defaultTitle = `${series} by ${prettyName(column)}`;
     chartData = {
       labels: points.map((p) => p.time),
       datasets: [
@@ -114,12 +124,12 @@ export default function AdaptiveChart({ datasetId, datasetName, columns }) {
     };
   } else if (chartType === "numeric_histogram") {
     chartJsType = "bar";
-    defaultTitle = `Distribution of ${column}`;
+    defaultTitle = `Distribution of ${prettyName(column)}`;
     chartData = {
       labels: points.map((p) => p.label),
       datasets: [
         {
-          label: `${column} (count)`,
+          label: `${prettyName(column)} Count`,
           data: points.map((p) => p.count),
           backgroundColor: "#1a85ff",
         },
@@ -129,7 +139,7 @@ export default function AdaptiveChart({ datasetId, datasetName, columns }) {
     // category_counts — doughnut when few categories, bar when many.
     const labels = points.map((p) => p.label);
     const counts = points.map((p) => p.count);
-    defaultTitle = `${column} breakdown`;
+    defaultTitle = `Rows by ${prettyName(column)}`;
     if (labels.length <= 8) {
       chartJsType = "doughnut";
       chartOptions = DOUGHNUT_OPTS;
@@ -137,7 +147,7 @@ export default function AdaptiveChart({ datasetId, datasetName, columns }) {
         labels,
         datasets: [
           {
-            label: `${column} (count)`,
+            label: "Rows",
             data: counts,
             backgroundColor: labels.map((_, i) => PALETTE[i % PALETTE.length]),
             borderColor: "#0f172a",
@@ -149,7 +159,7 @@ export default function AdaptiveChart({ datasetId, datasetName, columns }) {
       chartJsType = "bar";
       chartData = {
         labels,
-        datasets: [{ label: `${column} (count)`, data: counts, backgroundColor: "#1a85ff" }],
+        datasets: [{ label: "Rows", data: counts, backgroundColor: "#1a85ff" }],
       };
     }
   }
@@ -159,7 +169,13 @@ export default function AdaptiveChart({ datasetId, datasetName, columns }) {
 
   const hasChart = points.length > 0 && !!chartData;
   const exportTitle = title.trim() || defaultTitle;
-  const exportConfig = { type: chartJsType, data: chartData, title: exportTitle };
+  const exportConfig = {
+    type: chartJsType,
+    data: chartData,
+    title: exportTitle,
+    labelFormat: chartType === "time_series" ? "date" : undefined,
+    meta: { chartType, column, columnType: colType, agg, yColumn, points },
+  };
 
   // Summary for the PDF report — shares react-query's cache with SummaryPanel,
   // so this does not fire an extra request.

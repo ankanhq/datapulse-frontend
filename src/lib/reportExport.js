@@ -16,6 +16,63 @@ function fmt(v) {
   return String(v);
 }
 
+function prettyName(name) {
+  return String(name || "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+function compactDateLabel(value) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return new Intl.DateTimeFormat(undefined, { month: "short", day: "2-digit" }).format(d);
+}
+
+function pct(value) {
+  return `${Math.round(value * 100)}%`;
+}
+
+function buildInsights(summary, chartConfig) {
+  const meta = chartConfig.meta || {};
+  const points = meta.points || [];
+  const insights = [`${fmt(summary.total_rows)} rows across ${fmt(summary.total_columns)} columns are included in this report.`];
+  const col = summary.columns.find((c) => c.name === meta.column);
+
+  if (meta.chartType === "category_counts" && points.length) {
+    const top = points.reduce((best, p) => ((p.count || 0) > (best.count || 0) ? p : best), points[0]);
+    const total = points.reduce((sum, p) => sum + (Number(p.count) || 0), 0);
+    const share = total ? `, representing ${pct((Number(top.count) || 0) / total)} of charted rows` : "";
+    insights.push(`${top.label} contributes the largest ${prettyName(meta.column)} share${share}.`);
+  } else if (meta.chartType === "numeric_histogram" && col) {
+    insights.push(`${prettyName(meta.column)} ranges from ${fmt(col.min)} to ${fmt(col.max)}, with an average of ${fmt(col.avg)}.`);
+  } else if (meta.chartType === "time_series" && points.length) {
+    const values = points.map((p) => Number(p.value)).filter(Number.isFinite);
+    if (values.length) {
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      const avg = values.reduce((sum, v) => sum + v, 0) / values.length;
+      const peak = points.reduce((best, p) => (Number(p.value) > Number(best.value) ? p : best), points[0]);
+      const series = meta.agg === "count" ? "Count" : chartConfig.data?.datasets?.[0]?.label || "Value";
+      const spread = avg ? (max - min) / avg : 0;
+      if (spread <= 0.1) {
+        insights.push(`${series} remains relatively stable across the selected period.`);
+      } else if (spread >= 0.25) {
+        insights.push(`${series} varies significantly across the selected period.`);
+      } else {
+        insights.push(`${series} reaches its highest point around ${compactDateLabel(peak.time)}.`);
+      }
+    }
+  }
+
+  const numericCount = summary.columns.filter((c) => c.type === "number").length;
+  if (insights.length < 3 && numericCount) {
+    insights.push(`${numericCount} numeric column${numericCount === 1 ? "" : "s"} can support trend or distribution analysis.`);
+  }
+  return insights.slice(0, 3);
+}
+
 // One-line description of a column, matching the on-screen summary panel.
 function colStat(col) {
   if (col.type === "number") {
@@ -102,8 +159,9 @@ export async function downloadReport({ datasetName, summary, chartConfig }) {
   // The chart follows the column list, but never lower than maxChartTop, so it
   // always fits on the single page regardless of how many columns there are.
   const chartTargetW = contentW;
-  const chartTargetH = 204;
+  const chartTargetH = 178;
   const chartHeadingH = 18;
+  const insightsH = 66;
   const captionH = 16;
   const maxChartTop = pageH - margin - chartHeadingH - chartTargetH - captionH;
 
@@ -115,7 +173,7 @@ export async function downloadReport({ datasetName, summary, chartConfig }) {
   y += 16;
 
   const lineH = 16;
-  const available = maxChartTop - 14 - y;
+  const available = maxChartTop - insightsH - 22 - y;
   const maxRows = Math.max(0, Math.floor(available / lineH));
   const shown = summary.columns.slice(0, maxRows);
 
@@ -145,7 +203,24 @@ export async function downloadReport({ datasetName, summary, chartConfig }) {
     y += lineH;
   }
 
-  const chartY = Math.min(y + 20, maxChartTop);
+  const insights = buildInsights(summary, chartConfig);
+  const insightsY = Math.min(y + 14, maxChartTop - insightsH - 8);
+
+  doc.setDrawColor(...BORDER);
+  doc.setFillColor(248, 250, 252);
+  doc.roundedRect(margin, insightsY, contentW, insightsH, 6, 6, "FD");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(...SLATE_900);
+  doc.text("Key Insights", margin + 12, insightsY + 18);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(...SLATE_600);
+  insights.forEach((line, i) => {
+    doc.text(`• ${doc.splitTextToSize(line, contentW - 34)[0]}`, margin + 14, insightsY + 34 + i * 13);
+  });
+
+  const chartY = Math.min(insightsY + insightsH + 18, maxChartTop);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
