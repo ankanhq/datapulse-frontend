@@ -54,6 +54,7 @@ export default function App() {
         <AdaptiveChart
           key={`chart-${dataset.dataset_id}`}
           datasetId={dataset.dataset_id}
+          datasetName={dataset.name}
           columns={dataset.columns}
         />
       </div>
