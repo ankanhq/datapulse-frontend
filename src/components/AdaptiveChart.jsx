@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { useQuery, keepPreviousData, useQueryClient } from "@tanstack/react-query";
 import { Bar, Line, Doughnut } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -14,8 +14,6 @@ import {
   Filler,
 } from "chart.js";
 import { fetchChart, fetchSummary } from "../api";
-import { downloadChartPng, copyChartToClipboard } from "../lib/chartExport";
-import { downloadReport } from "../lib/reportExport";
 import Spinner from "./Spinner";
 
 ChartJS.register(
@@ -55,6 +53,7 @@ function chartTypeFor(colType) {
 }
 
 export default function AdaptiveChart({ datasetId, datasetName, columns }) {
+  const queryClient = useQueryClient();
   const numericColumns = useMemo(
     () => columns.filter((c) => c.type === "number"),
     [columns]
@@ -177,13 +176,6 @@ export default function AdaptiveChart({ datasetId, datasetName, columns }) {
     meta: { chartType, column, columnType: colType, agg, yColumn, points },
   };
 
-  // Summary for the PDF report — shares react-query's cache with SummaryPanel,
-  // so this does not fire an extra request.
-  const { data: summary } = useQuery({
-    queryKey: ["summary", datasetId],
-    queryFn: () => fetchSummary(datasetId),
-  });
-
   const [busy, setBusy] = useState(null); // "png" | "copy" | "pdf" | null
 
   function flash(msg, kind = "ok") {
@@ -205,12 +197,20 @@ export default function AdaptiveChart({ datasetId, datasetName, columns }) {
   }
 
   const onExportPng = () =>
-    run("png", () => downloadChartPng(exportConfig), "PNG downloaded");
+    run(
+      "png",
+      async () => {
+        const { downloadChartPng } = await import("../lib/chartExport");
+        return downloadChartPng(exportConfig);
+      },
+      "PNG downloaded"
+    );
 
   const onCopy = () =>
     run(
       "copy",
       async () => {
+        const { copyChartToClipboard } = await import("../lib/chartExport");
         const r = await copyChartToClipboard(exportConfig);
         return r === "copied" ? "Copied to clipboard" : "Clipboard blocked — downloaded instead";
       },
@@ -220,8 +220,14 @@ export default function AdaptiveChart({ datasetId, datasetName, columns }) {
   const onReport = () =>
     run(
       "pdf",
-      () => {
-        if (!summary) throw new Error("Summary not loaded yet");
+      async () => {
+        const [{ downloadReport }, summary] = await Promise.all([
+          import("../lib/reportExport"),
+          queryClient.ensureQueryData({
+            queryKey: ["summary", datasetId],
+            queryFn: () => fetchSummary(datasetId),
+          }),
+        ]);
         return downloadReport({ datasetName, summary, chartConfig: exportConfig });
       },
       "Report downloaded"
@@ -325,7 +331,7 @@ export default function AdaptiveChart({ datasetId, datasetName, columns }) {
           <button
             type="button"
             onClick={onReport}
-            disabled={!hasChart || !summary || !!busy}
+            disabled={!hasChart || !!busy}
             title="Download a one-page PDF report (stats + chart) on a white background"
             aria-label="Download one-page PDF report"
             className="inline-flex items-center gap-1.5 rounded-md bg-pulse-500 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-pulse-600 disabled:cursor-not-allowed disabled:opacity-40"

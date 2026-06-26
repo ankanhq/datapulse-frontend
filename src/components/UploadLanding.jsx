@@ -41,28 +41,32 @@ function Feature({ title, body }) {
   );
 }
 
-export default function UploadLanding({ onLoaded }) {
+export default function UploadLanding({ onLoaded, onPrepareDashboard }) {
   const inputRef = useRef(null);
   const [mode, setMode] = useState("file"); // "file" | "paste"
   const [dragging, setDragging] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [busy, setBusy] = useState(null); // "upload" | "paste" | "sample" | null
   const [error, setError] = useState("");
+  const [retryAction, setRetryAction] = useState(null);
 
   // Shared error handling for every load path.
-  async function onLoad(fn) {
+  async function onLoad(fn, retry) {
     try {
+      setRetryAction(null);
       return await fn();
     } catch (e) {
       setError(
-        `${e.message} (API: ${API_BASE}). The backend may be waking from sleep — try again in a moment.`
+        `${e.message} The backend may be waking from sleep — try again in a moment.`
       );
+      setRetryAction(() => retry);
       return null;
     }
   }
 
   async function handleFile(file) {
     setError("");
+    setRetryAction(null);
     if (!file) return;
     if (!/\.(csv|tsv|txt|xlsx|xls)$/i.test(file.name)) {
       setError("Please choose a CSV or Excel file (.csv, .xlsx, .xls).");
@@ -74,9 +78,10 @@ export default function UploadLanding({ onLoaded }) {
       );
       return;
     }
+    onPrepareDashboard?.();
     setBusy("upload");
     try {
-      const ds = await onLoad(() => uploadDataset(file));
+      const ds = await onLoad(() => uploadDataset(file), () => handleFile(file));
       if (ds) onLoaded(ds);
     } finally {
       setBusy(null);
@@ -85,6 +90,7 @@ export default function UploadLanding({ onLoaded }) {
 
   async function handlePaste() {
     setError("");
+    setRetryAction(null);
     if (!pasteText.trim()) {
       setError("Paste some CSV or tab-separated text first.");
       return;
@@ -93,9 +99,11 @@ export default function UploadLanding({ onLoaded }) {
       setError(`That's more than ${MAX_MB} MB of text — try a smaller sample or upload a file.`);
       return;
     }
+    onPrepareDashboard?.();
     setBusy("paste");
     try {
-      const ds = await onLoad(() => pasteDataset(pasteText, "Pasted data"));
+      const text = pasteText;
+      const ds = await onLoad(() => pasteDataset(text, "Pasted data"), () => handlePaste());
       if (ds) onLoaded(ds);
     } finally {
       setBusy(null);
@@ -104,9 +112,11 @@ export default function UploadLanding({ onLoaded }) {
 
   async function handleSample() {
     setError("");
+    setRetryAction(null);
+    onPrepareDashboard?.();
     setBusy("sample");
     try {
-      const ds = await onLoad(loadSampleDataset);
+      const ds = await onLoad(loadSampleDataset, handleSample);
       if (ds) onLoaded(ds);
     } finally {
       setBusy(null);
@@ -239,7 +249,18 @@ export default function UploadLanding({ onLoaded }) {
 
       {error && (
         <div className="mt-4 rounded-lg border border-red-900 bg-red-950/40 p-3 text-sm text-red-300">
-          {error}
+          <p>{error}</p>
+          <p className="mt-1 text-xs text-red-200/80">API endpoint: {API_BASE}</p>
+          {retryAction && (
+            <button
+              type="button"
+              onClick={retryAction}
+              disabled={!!busy}
+              className="mt-3 inline-flex items-center gap-2 rounded-md border border-red-700/70 bg-red-900/40 px-3 py-1.5 text-xs font-medium text-red-100 transition hover:bg-red-900/70 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Retry
+            </button>
+          )}
         </div>
       )}
 
