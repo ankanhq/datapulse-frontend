@@ -195,6 +195,39 @@ function driverChartData(drivers) {
   };
 }
 
+// Kept in sync with chartExport's CAPTION. Inlined (not imported) so this chunk
+// doesn't eagerly pull in chart.js/auto just for a caption string.
+const CAPTION = "datapulse-frontend.vercel.app";
+
+// Deterministic, meeting-ready plaintext summary of the current comparison —
+// paste straight into Slack, email, or notes.
+function buildSummaryText({ metricTitle, contextLine, comparison, agg }) {
+  const digits = agg === "count" ? 0 : 2;
+  const lines = [
+    "DataPulse — Compare Mode",
+    metricTitle,
+  ];
+  if (contextLine) lines.push(contextLine);
+  lines.push(
+    "",
+    `Baseline:  ${fmt(comparison.baseTotal, digits)}`,
+    `Current:   ${fmt(comparison.currentTotal, digits)}`,
+    `Delta:     ${fmtSigned(comparison.delta, agg)} (${pct(comparison.delta, comparison.baseTotal)})`
+  );
+  if (comparison.positives.length || comparison.negatives.length) {
+    lines.push("", "Top movers");
+    comparison.positives.forEach((d) => lines.push(`  ▲ ${d.label}: ${fmtSigned(d.delta, agg)}`));
+    comparison.negatives.forEach((d) => lines.push(`  ▼ ${d.label}: ${fmtSigned(d.delta, agg)}`));
+  }
+  lines.push("", "Why it changed", comparison.narrative, "", CAPTION);
+  return lines.join("\n");
+}
+
+async function copyText(text) {
+  if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable in this browser.");
+  await navigator.clipboard.writeText(text);
+}
+
 function StatCard({ label, value, tone = "default" }) {
   const toneClass = tone === "good" ? "text-emerald-300" : tone === "bad" ? "text-orange-300" : "text-slate-50";
   return (
@@ -234,6 +267,8 @@ export default function CompareMode({ dataset, columns }) {
   const [peerDataset, setPeerDataset] = useState(null);
   const [peerBusy, setPeerBusy] = useState(false);
   const [peerError, setPeerError] = useState("");
+  const [exportBusy, setExportBusy] = useState(null); // "summary" | "chart" | null
+  const [exportMsg, setExportMsg] = useState(null); // { kind, msg } | null
 
   const summaryQuery = useQuery({
     queryKey: ["summary", dataset.dataset_id],
@@ -335,6 +370,55 @@ export default function CompareMode({ dataset, columns }) {
   const error = baselineQuery.error || currentQuery.error;
   const deltaTone = comparison.delta > 0 ? "good" : comparison.delta < 0 ? "bad" : "default";
   const metricTitle = agg === "count" ? "Row Count" : `${AGG_LABEL[agg]} ${prettyName(metricColumn)}`;
+
+  const contextLine =
+    mode === "time"
+      ? `Baseline ${effectiveRanges.baselineStart || "start"} to ${effectiveRanges.baselineEnd || "end"}; current ${effectiveRanges.currentStart || "start"} to ${effectiveRanges.currentEnd || "end"}.`
+      : mode === "filter"
+        ? `${prettyName(compareColumn)}: ${effectiveBaselineValue || "baseline"} vs ${effectiveCurrentValue || "current"}.`
+        : `${dataset.name} vs ${peerDataset?.name || "comparison dataset"}.`;
+
+  function flashExport(msg, kind = "ok") {
+    setExportMsg({ kind, msg });
+    setTimeout(() => setExportMsg(null), 2500);
+  }
+
+  async function runExport(kind, fn, okMsg) {
+    if (exportBusy) return;
+    setExportBusy(kind);
+    try {
+      const res = await fn();
+      flashExport(typeof res === "string" ? res : okMsg);
+    } catch (e) {
+      flashExport(e?.message || "Export failed", "err");
+    } finally {
+      setExportBusy(null);
+    }
+  }
+
+  const onCopySummary = () =>
+    runExport(
+      "summary",
+      () => copyText(buildSummaryText({ metricTitle, contextLine, comparison, agg })),
+      "Summary copied to clipboard"
+    );
+
+  const onCopyChart = () =>
+    runExport(
+      "chart",
+      async () => {
+        const config = seriesData
+          ? { type: "line", data: seriesData, title: metricTitle }
+          : deltaData
+            ? { type: "bar", data: deltaData, title: `${metricTitle} — driver deltas` }
+            : null;
+        if (!config) throw new Error("No chartable comparison to copy yet.");
+        const { copyChartToClipboard } = await import("../lib/chartExport");
+        const r = await copyChartToClipboard(config);
+        return r === "copied" ? "Chart copied to clipboard" : "Clipboard blocked — downloaded instead";
+      },
+      "Chart copied to clipboard"
+    );
 
   return (
     <section className="animate-fade-in rounded-xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5">
@@ -490,6 +574,29 @@ export default function CompareMode({ dataset, columns }) {
                   </div>
                   <DriverList title="Top positive changes" rows={comparison.positives} agg={agg} empty="No positive movers." />
                   <DriverList title="Top negative changes" rows={comparison.negatives} agg={agg} empty="No negative movers." />
+                </div>
+              </div>
+
+              {/* Meeting-ready export — copy the comparison as text or the delta chart as an image. */}
+              <div className="border-t border-slate-800 pt-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="mr-1 text-xs uppercase tracking-wide text-slate-500">Share</span>
+                  <button type="button" onClick={onCopySummary} disabled={!!exportBusy} className={btnClass}>
+                    {exportBusy === "summary" ? "Copying…" : "Copy summary"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onCopyChart}
+                    disabled={!!exportBusy || (!seriesData && !deltaData)}
+                    className={btnClass}
+                  >
+                    {exportBusy === "chart" ? "Copying…" : "Copy chart"}
+                  </button>
+                  {exportMsg && (
+                    <span className={`text-xs ${exportMsg.kind === "err" ? "text-red-400" : "text-emerald-400"}`}>
+                      {exportMsg.msg}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
