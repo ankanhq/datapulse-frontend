@@ -90,6 +90,9 @@ export const fetchQuery = (id, params) =>
 export const fetchChart = (id, params) =>
   requestJson(`${API_BASE}/datasets/${id}/chart${toQuery(params)}`);
 
+export const fetchComparison = (id, params) =>
+  requestJson(`${API_BASE}/datasets/${id}/compare${toQuery(params)}`);
+
 // Full URL for the streaming CSV export. Returned as a string (not fetched) so
 // the browser downloads it directly to disk.
 export const exportUrl = (id, params) =>

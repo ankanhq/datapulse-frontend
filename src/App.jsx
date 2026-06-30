@@ -5,15 +5,18 @@ import Spinner from "./components/Spinner";
 
 const loadSummaryPanel = () => import("./components/SummaryPanel");
 const loadAdaptiveChart = () => import("./components/AdaptiveChart");
+const loadCompareMode = () => import("./components/CompareMode");
 const loadDataTable = () => import("./components/DataTable");
 
 const SummaryPanel = lazy(loadSummaryPanel);
 const AdaptiveChart = lazy(loadAdaptiveChart);
+const CompareMode = lazy(loadCompareMode);
 const DataTable = lazy(loadDataTable);
 
 function preloadDashboard() {
   loadSummaryPanel();
   loadAdaptiveChart();
+  loadCompareMode();
   loadDataTable();
 }
 
@@ -68,6 +71,14 @@ export default function App() {
             key={`chart-${dataset.dataset_id}`}
             datasetId={dataset.dataset_id}
             datasetName={dataset.name}
+            columns={dataset.columns}
+          />
+        </div>
+
+        <div className="mb-6">
+          <CompareMode
+            key={`compare-${dataset.dataset_id}`}
+            dataset={dataset}
             columns={dataset.columns}
           />
         </div>
