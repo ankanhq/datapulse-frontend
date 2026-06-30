@@ -13,6 +13,28 @@ const envTimeout = Number(import.meta.env.VITE_API_TIMEOUT_MS);
 const DEFAULT_TIMEOUT_MS = Number.isFinite(envTimeout) && envTimeout > 0 ? envTimeout : 30_000;
 const LOAD_TIMEOUT_MS = Number.isFinite(envTimeout) && envTimeout > 0 ? envTimeout : 75_000;
 
+// --- Cold-start ("server waking up") signal -------------------------------
+// The free backend tier sleeps when idle, so the first request after a nap can
+// take 30–60s. Any request still in flight after SLOW_AFTER_MS is treated as a
+// cold start: we bump a counter and notify subscribers so the UI can show a
+// friendly "waking up" message, then clear it the moment the request settles.
+const SLOW_AFTER_MS = 4000;
+let slowCount = 0;
+const slowListeners = new Set();
+
+function emitSlow() {
+  const active = slowCount > 0;
+  for (const listener of slowListeners) listener(active);
+}
+
+/** Subscribe to cold-start state. Calls back with `true` while at least one
+ *  request has been running longer than ~4s. Returns an unsubscribe fn. */
+export function subscribeColdStart(listener) {
+  slowListeners.add(listener);
+  listener(slowCount > 0);
+  return () => slowListeners.delete(listener);
+}
+
 /** Build a query string from an object, skipping empty/undefined values. */
 function toQuery(params = {}) {
   const search = new URLSearchParams();
@@ -42,6 +64,12 @@ async function handle(res) {
 async function requestJson(url, options = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let countedSlow = false;
+  const slowTimer = setTimeout(() => {
+    countedSlow = true;
+    slowCount += 1;
+    emitSlow();
+  }, SLOW_AFTER_MS);
   try {
     const res = await fetch(url, { ...options, signal: controller.signal });
     return handle(res);
@@ -57,6 +85,11 @@ async function requestJson(url, options = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
     throw e;
   } finally {
     clearTimeout(timer);
+    clearTimeout(slowTimer);
+    if (countedSlow) {
+      slowCount -= 1;
+      emitSlow();
+    }
   }
 }
 

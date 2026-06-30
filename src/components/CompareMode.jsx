@@ -91,6 +91,20 @@ function filtersParam(filters) {
   return filters.length ? JSON.stringify(filters) : undefined;
 }
 
+// Compare an uploaded dataset's columns against the currently loaded one. Returns
+// null when the column names match, otherwise the missing/extra names so the UI
+// can warn that an A/B comparison may be inaccurate. Never throws on odd input.
+function columnMismatch(expected = [], actual = []) {
+  const expectedNames = (expected || []).map((c) => c?.name).filter(Boolean);
+  const actualNames = (actual || []).map((c) => c?.name).filter(Boolean);
+  const actualSet = new Set(actualNames);
+  const expectedSet = new Set(expectedNames);
+  const missing = expectedNames.filter((n) => !actualSet.has(n));
+  const extra = actualNames.filter((n) => !expectedSet.has(n));
+  if (!missing.length && !extra.length) return null;
+  return { expected: expectedNames, missing, extra };
+}
+
 function dateRangeFilters(column, start, end) {
   const filters = [];
   if (column && start) filters.push({ col: column, op: "gte", value: start });
@@ -267,6 +281,7 @@ export default function CompareMode({ dataset, columns }) {
   const [peerDataset, setPeerDataset] = useState(null);
   const [peerBusy, setPeerBusy] = useState(false);
   const [peerError, setPeerError] = useState("");
+  const [peerWarning, setPeerWarning] = useState(null); // { expected, missing, extra } | null
   const [exportBusy, setExportBusy] = useState(null); // "summary" | "chart" | null
   const [exportMsg, setExportMsg] = useState(null); // { kind, msg } | null
 
@@ -357,13 +372,26 @@ export default function CompareMode({ dataset, columns }) {
     if (!file) return;
     setPeerBusy(true);
     setPeerError("");
+    setPeerWarning(null);
     try {
-      setPeerDataset(await uploadDataset(file));
+      const ds = await uploadDataset(file);
+      setPeerDataset(ds);
+      // Surface a friendly heads-up (without blocking the comparison) when the
+      // uploaded file's columns don't line up with the current dataset's.
+      setPeerWarning(columnMismatch(columns, ds.columns));
     } catch (e) {
       setPeerError(e?.message || "Could not load comparison dataset.");
     } finally {
       setPeerBusy(false);
     }
+  }
+
+  // One-click demo for the "Filter sets" tab: pick two distinct values from the
+  // current compare column and run the comparison so new users see how it works.
+  function handleLoadExample() {
+    if (segmentValues.length < 2) return;
+    setBaselineValue(segmentValues[1]);
+    setCurrentValue(segmentValues[0]);
   }
 
   const isLoading = baselineQuery.isLoading || currentQuery.isLoading || baselineQuery.isFetching || currentQuery.isFetching;
@@ -488,22 +516,42 @@ export default function CompareMode({ dataset, columns }) {
               )}
 
               {mode === "filter" && (
-                <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                  <Field label="Compare column">
-                    <select className={inputClass} value={compareColumn} onChange={(e) => setCompareColumn(e.target.value)}>
-                      {segmentColumns.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
-                    </select>
-                  </Field>
-                  <Field label="Baseline filter">
-                    <select className={inputClass} value={effectiveBaselineValue} onChange={(e) => setBaselineValue(e.target.value)} disabled={valuesQuery.isLoading || !segmentValues.length}>
-                      {segmentValues.map((v) => <option key={v} value={v}>{v}</option>)}
-                    </select>
-                  </Field>
-                  <Field label="Current filter">
-                    <select className={inputClass} value={effectiveCurrentValue} onChange={(e) => setCurrentValue(e.target.value)} disabled={valuesQuery.isLoading || !segmentValues.length}>
-                      {segmentValues.map((v) => <option key={v} value={v}>{v}</option>)}
-                    </select>
-                  </Field>
+                <div className="mt-4 space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <Field label="Compare column">
+                      <select className={inputClass} value={compareColumn} onChange={(e) => setCompareColumn(e.target.value)}>
+                        {segmentColumns.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+                      </select>
+                    </Field>
+                    <Field label="Baseline filter">
+                      <select className={inputClass} value={effectiveBaselineValue} onChange={(e) => setBaselineValue(e.target.value)} disabled={valuesQuery.isLoading || !segmentValues.length}>
+                        {segmentValues.map((v) => <option key={v} value={v}>{v}</option>)}
+                      </select>
+                    </Field>
+                    <Field label="Current filter">
+                      <select className={inputClass} value={effectiveCurrentValue} onChange={(e) => setCurrentValue(e.target.value)} disabled={valuesQuery.isLoading || !segmentValues.length}>
+                        {segmentValues.map((v) => <option key={v} value={v}>{v}</option>)}
+                      </select>
+                    </Field>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleLoadExample}
+                      disabled={valuesQuery.isLoading || segmentValues.length < 2}
+                      className={btnClass}
+                    >
+                      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      Load example
+                    </button>
+                    <span className="text-xs text-slate-500">
+                      {segmentValues.length >= 2
+                        ? `Compares ${prettyName(compareColumn)} "${segmentValues[1]}" vs "${segmentValues[0]}" in one click.`
+                        : "Pick a column with at least two values to load an example."}
+                    </span>
+                  </div>
                 </div>
               )}
 
@@ -524,6 +572,17 @@ export default function CompareMode({ dataset, columns }) {
                     {peerDataset && <span className="text-sm text-emerald-300">{peerDataset.name} loaded</span>}
                   </div>
                   {peerError && <p className="mt-2 text-sm text-red-400">{peerError}</p>}
+                  {peerWarning && (
+                    <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-700/60 bg-amber-950/40 p-3 text-sm text-amber-200">
+                      <svg viewBox="0 0 24 24" className="mt-0.5 h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M12 9v4m0 4h.01M10.3 3.86l-8.5 14.7A2 2 0 003.5 21h17a2 2 0 001.7-2.44l-8.5-14.7a2 2 0 00-3.4 0z" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <span>
+                        This file's columns don't match your current dataset — expected:{" "}
+                        <span className="font-medium text-amber-100">{peerWarning.expected.join(", ") || "—"}</span>. The comparison may be inaccurate.
+                      </span>
+                    </div>
+                  )}
                   <p className="mt-2 text-xs text-slate-500">Use a dataset with matching column names for the cleanest comparison.</p>
                 </div>
               )}
