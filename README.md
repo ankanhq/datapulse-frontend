@@ -73,3 +73,4 @@ npm run preview  # serve the production build locally
 
 The backend repo's [DEPLOY.md](https://github.com/ankanhq/datapulse/blob/main/DEPLOY.md)
 covers deploying this frontend to Vercel alongside the backend on Render.
+
