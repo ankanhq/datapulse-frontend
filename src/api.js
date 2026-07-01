@@ -126,6 +126,16 @@ export const fetchChart = (id, params) =>
 export const fetchComparison = (id, params) =>
   requestJson(`${API_BASE}/datasets/${id}/compare${toQuery(params)}`);
 
+/** Evidence Mode: the full evidence-backed insight report. params: {mode, filters}. */
+export const fetchInsights = (id, params) =>
+  requestJson(`${API_BASE}/datasets/${id}/insights${toQuery(params)}`);
+
+/** Fetch the exact rows (by DuckDB rowid) behind an insight, for the proof drawer. */
+export const fetchRows = (id, rowids, filters) =>
+  requestJson(
+    `${API_BASE}/datasets/${id}/rows${toQuery({ rowids: (rowids || []).join(","), filters })}`
+  );
+
 // Full URL for the streaming CSV export. Returned as a string (not fetched) so
 // the browser downloads it directly to disk.
 export const exportUrl = (id, params) =>
