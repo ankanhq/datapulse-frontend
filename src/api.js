@@ -136,6 +136,17 @@ export const fetchRows = (id, rowids, filters) =>
     `${API_BASE}/datasets/${id}/rows${toQuery({ rowids: (rowids || []).join(","), filters })}`
   );
 
+/** Persist a computed report for sharing. Returns { token, url }. */
+export const createReport = (report, datasetName) =>
+  requestJson(`${API_BASE}/reports`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ report, dataset_name: datasetName }),
+  });
+
+/** Fetch a previously shared report by token (read-only view). */
+export const fetchReport = (token) => requestJson(`${API_BASE}/reports/${token}`);
+
 // Full URL for the streaming CSV export. Returned as a string (not fetched) so
 // the browser downloads it directly to disk.
 export const exportUrl = (id, params) =>

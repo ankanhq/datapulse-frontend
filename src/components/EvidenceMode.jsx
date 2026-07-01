@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
-import { fetchInsights, fetchRows } from "../api";
+import { fetchInsights, fetchRows, createReport } from "../api";
 import Spinner from "./Spinner";
 
 // Evidence Mode — a trustworthy, evidence-backed data story. Every card here is
@@ -284,6 +284,10 @@ function EvidenceDrawer({ datasetId, filtersParam, insight, onClose, onHighlight
 export default function EvidenceMode({ dataset, columns, filters = [], filtersParam, onHighlightInTable }) {
   const [mode, setMode] = useState("analyst");
   const [drawerInsight, setDrawerInsight] = useState(null);
+  const [shareBusy, setShareBusy] = useState(false);
+  const [shareUrl, setShareUrl] = useState("");
+  const [shareError, setShareError] = useState("");
+  const [copied, setCopied] = useState(false);
 
   const { data, isLoading, isError, error, isFetching } = useQuery({
     queryKey: ["insights", dataset.dataset_id, mode, filtersParam ?? null],
@@ -306,6 +310,36 @@ export default function EvidenceMode({ dataset, columns, filters = [], filtersPa
     onHighlightInTable?.(rowIds, label);
   }
 
+  // Reset any existing share link whenever the underlying report changes.
+  useEffect(() => {
+    setShareUrl("");
+    setShareError("");
+  }, [dataset.dataset_id, mode, filtersParam]);
+
+  async function handleGenerateReport() {
+    if (!data || shareBusy) return;
+    setShareBusy(true);
+    setShareError("");
+    try {
+      const res = await createReport(data, dataset.name);
+      setShareUrl(`${window.location.origin}${res.url}`);
+    } catch (e) {
+      setShareError(e?.message || "Could not generate a shareable report.");
+    } finally {
+      setShareBusy(false);
+    }
+  }
+
+  async function copyShare() {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard blocked — the link is still visible to copy manually */
+    }
+  }
+
   return (
     <section className="animate-fade-in space-y-6">
       {/* Header + audience selector */}
@@ -322,22 +356,65 @@ export default function EvidenceMode({ dataset, columns, filters = [], filtersPa
               {isFetching && <span className="ml-2 text-slate-500">Refreshing…</span>}
             </p>
           </div>
-          <div>
-            <label htmlFor="audience-mode" className="block text-[11px] font-medium uppercase tracking-wide text-slate-500">
-              Explain for
-            </label>
-            <select
-              id="audience-mode"
-              value={mode}
-              onChange={(e) => setMode(e.target.value)}
-              className="mt-1 rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100 focus:border-pulse-500 focus:outline-none focus:ring-1 focus:ring-pulse-500"
+          <div className="flex flex-col items-end gap-2">
+            <div>
+              <label htmlFor="audience-mode" className="block text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                Explain for
+              </label>
+              <select
+                id="audience-mode"
+                value={mode}
+                onChange={(e) => setMode(e.target.value)}
+                className="mt-1 rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100 focus:border-pulse-500 focus:outline-none focus:ring-1 focus:ring-pulse-500"
+              >
+                {MODES.map((m) => (
+                  <option key={m.id} value={m.id}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="button"
+              onClick={handleGenerateReport}
+              disabled={shareBusy || !data}
+              className="inline-flex items-center gap-1.5 rounded-md bg-pulse-500 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-pulse-600 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-pulse-500"
             >
-              {MODES.map((m) => (
-                <option key={m.id} value={m.id}>{m.label}</option>
-              ))}
-            </select>
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7M16 6l-4-4-4 4M12 2v14" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {shareBusy ? "Generating…" : "Generate report"}
+            </button>
           </div>
         </div>
+
+        {(shareUrl || shareError) && (
+          <div className="mt-3 rounded-lg border border-slate-800 bg-slate-950/50 p-3">
+            {shareError ? (
+              <p className="text-sm text-red-400">{shareError}</p>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs uppercase tracking-wide text-slate-500">Shareable link</span>
+                <a
+                  href={shareUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="min-w-0 flex-1 truncate rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-pulse-300 hover:underline"
+                >
+                  {shareUrl}
+                </a>
+                <button
+                  type="button"
+                  onClick={copyShare}
+                  className="rounded-md border border-slate-700 bg-slate-800 px-3 py-1 text-xs font-medium text-slate-100 transition hover:bg-slate-700"
+                >
+                  {copied ? "Copied!" : "Copy"}
+                </button>
+                <p className="w-full text-[11px] text-slate-500">
+                  Read-only snapshot of this story. Links are best-effort on the free tier and may expire on server restart.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {filters.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
