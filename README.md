@@ -8,6 +8,10 @@ Upload or paste a spreadsheet and get instant analytics in the browser.
 This is the React app. The [backend](https://github.com/ankanhq/datapulse) is a
 separate FastAPI + DuckDB service.
 
+## What's new
+- **Evidence Mode** — turn any spreadsheet into a plain-English story with the proof attached.
+- **Compare Mode** — compare two slices of your data and see exactly what changed and why.
+
 ## What it does
 
 Drop in a CSV or Excel file — or paste spreadsheet text, or paste a file straight
@@ -26,6 +30,23 @@ columns and renders a live dashboard:
 There's a "Try with sample data" button so the dashboard works on first visit,
 and everything is free with no signup. Files are capped at 25 MB and are never
 stored — they're processed in memory by the backend and evicted automatically.
+
+### Evidence Mode
+Turns your spreadsheet into a set of plain-English insights — with the proof
+attached. Every card is computed straight from your rows (real statistics, no
+LLM): an executive summary, the most notable findings ranked, category
+concentration, outliers, missing-data checks, correlations, and what changed most
+over time. Each insight carries a confidence score and a trust score, and a
+**Show evidence** button opens the exact rows and the calculation behind the
+claim. Use **Explain for** (Student / Analyst / Founder / Manager / Researcher) to
+reword the story, and **Generate report** to create a read-only shareable page.
+
+![Evidence Mode](evidence.png)
+
+### Compare Mode
+Compare two slices of your data — two date ranges, two filter sets, or a second
+uploaded file — and get the delta, % change, top movers, and a plain-English
+reason the metric moved.
 
 ## Tech stack
 
