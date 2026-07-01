@@ -289,10 +289,11 @@ export default function EvidenceMode({ dataset, columns, filters = [], filtersPa
   const [shareError, setShareError] = useState("");
   const [copied, setCopied] = useState(false);
 
-  const { data, isLoading, isError, error, isFetching } = useQuery({
+  const { data, isLoading, isError, error, isFetching, refetch } = useQuery({
     queryKey: ["insights", dataset.dataset_id, mode, filtersParam ?? null],
     queryFn: () => fetchInsights(dataset.dataset_id, { mode, filters: filtersParam }),
     placeholderData: keepPreviousData,
+    retry: 1,
   });
 
   const byCategory = useMemo(() => {
@@ -304,6 +305,17 @@ export default function EvidenceMode({ dataset, columns, filters = [], filtersPa
   }, [data]);
 
   const execCard = (byCategory.executive_summary || [])[0];
+
+  // "Meaningful" = a real computed finding, not the exec summary and not a
+  // limitation. If there are none, we show a friendly explainer rather than a
+  // page of only limitation cards (or a blank screen).
+  const meaningfulCount = useMemo(
+    () =>
+      (data?.insights ?? []).filter(
+        (i) => !i.is_limitation && i.category !== "executive_summary"
+      ).length,
+    [data]
+  );
 
   function handleHighlight(rowIds, label) {
     setDrawerInsight(null);
@@ -429,8 +441,20 @@ export default function EvidenceMode({ dataset, columns, filters = [], filtersPa
       </div>
 
       {isError ? (
-        <div className="rounded-xl border border-red-900 bg-red-950/40 p-4 text-sm text-red-300">
-          Could not compute insights: {error.message}
+        <div className="rounded-xl border border-red-900 bg-red-950/40 p-4">
+          <p className="text-sm font-medium text-red-200">Couldn’t compute insights</p>
+          <p className="mt-1 text-sm text-red-300">{error.message}</p>
+          <p className="mt-1 text-xs text-red-300/70">
+            The rest of DataPulse (table, charts, export) still works. If this was a cold start,
+            the server may just need a moment.
+          </p>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-red-700/70 bg-red-900/40 px-3 py-1.5 text-xs font-medium text-red-100 transition hover:bg-red-900/70"
+          >
+            Retry
+          </button>
         </div>
       ) : isLoading ? (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-8">
@@ -445,6 +469,20 @@ export default function EvidenceMode({ dataset, columns, filters = [], filtersPa
               <p className="text-[11px] font-semibold uppercase tracking-wide text-pulse-300">Executive summary</p>
               <p className="mt-2 text-sm leading-6 text-slate-200">{execCard.explanation}</p>
               <p className="mt-2 text-sm leading-6 text-slate-400">{execCard.why_it_matters}</p>
+            </div>
+          )}
+
+          {meaningfulCount === 0 && (
+            <div className="rounded-2xl border border-amber-700/40 bg-amber-950/30 p-4 sm:p-5">
+              <p className="text-sm font-medium text-amber-100">
+                No high-confidence insights for this slice
+              </p>
+              <p className="mt-1 text-sm leading-6 text-amber-200/80">
+                DataPulse analysed the data but every check either didn’t apply or didn’t clear the
+                confidence bar — often because there are too few rows, no date/numeric columns, or a
+                single dominant value. That’s reported honestly below rather than invented. Try a
+                larger dataset, fewer filters, or a file with date and numeric columns.
+              </p>
             </div>
           )}
 

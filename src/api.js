@@ -49,13 +49,21 @@ function toQuery(params = {}) {
 
 async function handle(res) {
   if (!res.ok) {
-    let detail = res.statusText || "Request failed";
+    let detail = res.statusText || "";
     try {
       const body = await res.json();
-      detail = body.detail || detail;
+      if (body?.detail) detail = body.detail;
     } catch {
-      /* response was not JSON */
+      /* response was not JSON (e.g. an empty-body 502/503 from the host) */
     }
+    if (!detail) {
+      detail =
+        res.status >= 500
+          ? "The server had a problem handling this request (it may be waking up or overloaded)"
+          : "Request failed";
+    }
+    // Always surface the real HTTP status so failures aren't mistaken for a
+    // network/"could not reach" error.
     throw new Error(`${detail} (HTTP ${res.status})`);
   }
   return res.json();
