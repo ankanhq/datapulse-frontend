@@ -22,6 +22,8 @@ ChartJS.register(
 );
 
 const PALETTE = ["#1a85ff", "#22c55e", "#f59e0b", "#a855f7", "#ef4444", "#14b8a6", "#eab308", "#ec4899"];
+// Mirrors the backend cap on split-by series (main.py SPLIT_SERIES_TOP_N).
+const SPLIT_SERIES_TOP_N = 8;
 const inputClass =
   "rounded-md border border-slate-700 bg-slate-800 px-2.5 py-1 text-sm text-slate-100 focus:border-pulse-500 focus:outline-none";
 
@@ -58,6 +60,10 @@ export default function AdaptiveChart({ datasetId, datasetName, columns }) {
     () => columns.filter((c) => c.type === "number"),
     [columns]
   );
+  const categoryColumns = useMemo(
+    () => columns.filter((c) => c.type === "text"),
+    [columns]
+  );
   // Default to the first date column if present (most interesting), else first column.
   const defaultCol =
     columns.find((c) => c.type === "date")?.name ?? columns[0]?.name ?? "";
@@ -65,6 +71,7 @@ export default function AdaptiveChart({ datasetId, datasetName, columns }) {
   const [column, setColumn] = useState(defaultCol);
   const [agg, setAgg] = useState("count");
   const [yColumn, setYColumn] = useState(numericColumns[0]?.name ?? "");
+  const [splitBy, setSplitBy] = useState(""); // "" = single line
 
   // Export controls.
   const [title, setTitle] = useState("");
@@ -73,11 +80,16 @@ export default function AdaptiveChart({ datasetId, datasetName, columns }) {
   const colType = columns.find((c) => c.name === column)?.type ?? "text";
   const chartType = chartTypeFor(colType);
 
+  const splitActive = chartType === "time_series" && !!splitBy;
   const params = {
     chart_type: chartType,
     column,
     ...(chartType === "time_series"
-      ? { agg, y_column: agg === "count" ? undefined : yColumn }
+      ? {
+          agg,
+          y_column: agg === "count" ? undefined : yColumn,
+          split_by: splitBy || undefined,
+        }
       : {}),
   };
 
@@ -105,22 +117,42 @@ export default function AdaptiveChart({ datasetId, datasetName, columns }) {
 
   if (chartType === "time_series") {
     chartJsType = "line";
-    const series = agg === "count" ? "Count" : `${AGG_LABEL[agg]} ${prettyName(yColumn)}`;
-    defaultTitle = `${series} by ${prettyName(column)}`;
-    chartData = {
-      labels: points.map((p) => p.time),
-      datasets: [
-        {
-          label: series,
-          data: points.map((p) => p.value),
-          borderColor: "#1a85ff",
-          backgroundColor: "rgba(26,133,255,0.15)",
-          fill: true,
+    const metric = agg === "count" ? "Count" : `${AGG_LABEL[agg]} ${prettyName(yColumn)}`;
+    if (splitActive) {
+      // One line per category value (from the backend's { labels, series } shape).
+      const labels = data?.labels ?? [];
+      const series = data?.series ?? [];
+      defaultTitle = `${metric} by ${prettyName(column)}, per ${prettyName(splitBy)}`;
+      chartData = {
+        labels,
+        datasets: series.map((s, i) => ({
+          label: String(s.key),
+          data: s.values,
+          borderColor: PALETTE[i % PALETTE.length],
+          backgroundColor: PALETTE[i % PALETTE.length],
+          fill: false,
           tension: 0.3,
-          pointRadius: points.length > 60 ? 0 : 2,
-        },
-      ],
-    };
+          spanGaps: true,
+          pointRadius: labels.length > 60 ? 0 : 2,
+        })),
+      };
+    } else {
+      defaultTitle = `${metric} by ${prettyName(column)}`;
+      chartData = {
+        labels: points.map((p) => p.time),
+        datasets: [
+          {
+            label: metric,
+            data: points.map((p) => p.value),
+            borderColor: "#1a85ff",
+            backgroundColor: "rgba(26,133,255,0.15)",
+            fill: true,
+            tension: 0.3,
+            pointRadius: points.length > 60 ? 0 : 2,
+          },
+        ],
+      };
+    }
   } else if (chartType === "numeric_histogram") {
     chartJsType = "bar";
     defaultTitle = `Distribution of ${prettyName(column)}`;
@@ -166,7 +198,9 @@ export default function AdaptiveChart({ datasetId, datasetName, columns }) {
   const COMPONENT = { line: Line, bar: Bar, doughnut: Doughnut }[chartJsType];
   const chartEl = chartData ? <COMPONENT data={chartData} options={chartOptions} /> : null;
 
-  const hasChart = points.length > 0 && !!chartData;
+  // Row/point presence across both shapes (single `data` vs split `series`).
+  const chartLen = splitActive ? (data?.labels?.length ?? 0) : points.length;
+  const hasChart = chartLen > 0 && !!chartData;
   const exportTitle = title.trim() || defaultTitle;
   const exportConfig = {
     type: chartJsType,
@@ -263,13 +297,29 @@ export default function AdaptiveChart({ datasetId, datasetName, columns }) {
                   ))}
                 </select>
               )}
+              {categoryColumns.length > 0 && (
+                <>
+                  <label className="text-xs text-slate-400">Split by</label>
+                  <select className={inputClass} value={splitBy} onChange={(e) => setSplitBy(e.target.value)}>
+                    <option value="">None</option>
+                    {categoryColumns.map((c) => (
+                      <option key={c.name} value={c.name}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
             </>
           )}
         </div>
       </div>
 
       <p className="mb-3 text-xs text-slate-500">
-        {chartType === "time_series" && "Trend over time — choose an aggregation."}
+        {chartType === "time_series" &&
+          (splitActive
+            ? `Trend over time — one line per ${prettyName(splitBy)} (top ${SPLIT_SERIES_TOP_N}).`
+            : "Trend over time — choose an aggregation, and optionally split by a category.")}
         {chartType === "numeric_histogram" && "Distribution of values across bins."}
         {chartType === "category_counts" && "Row counts per distinct value (top 50)."}
       </p>
@@ -279,7 +329,7 @@ export default function AdaptiveChart({ datasetId, datasetName, columns }) {
           <p className="text-sm text-red-400">Error: {error.message}</p>
         ) : isLoading ? (
           <Spinner label="Loading chart…" />
-        ) : points.length === 0 ? (
+        ) : chartLen === 0 ? (
           <p className="text-sm text-slate-500">No data to chart for this column.</p>
         ) : (
           <>
