@@ -77,6 +77,23 @@ npm run build    # outputs to dist/
 npm run preview  # serve the production build locally
 ```
 
+### Accounts (Supabase)
+
+The whole app is gated behind sign-in. Set these build-time env vars (Supabase
+project → Settings → API); the anon key is public and safe in the browser, so no
+secrets are committed:
+
+```bash
+VITE_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
+VITE_SUPABASE_ANON_KEY=your-public-anon-key
+```
+
+Signed-out visitors see only a login screen that uses **email OTP** (enter email
+→ receive a 6-digit code → verify). Once signed in, the existing app renders and
+the header shows the account email with a **Sign out** button. Every backend
+request carries the Supabase access token as `Authorization: Bearer <token>`, so
+each user only ever sees their own datasets and reports.
+
 ## Project structure
 
 | File | Purpose |
