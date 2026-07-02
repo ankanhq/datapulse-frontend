@@ -77,6 +77,53 @@ function TrustBadge({ value }) {
   );
 }
 
+// Small info popover explaining what Confidence and Trust mean, in plain words.
+function ScoreInfo() {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label="How to read the confidence and trust scores"
+        aria-expanded={open}
+        className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-800/70 px-2 py-0.5 text-[11px] font-medium text-slate-300 transition hover:bg-slate-700"
+      >
+        <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.2">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 11v5M12 7.5h.01" strokeLinecap="round" />
+        </svg>
+        How scores work
+      </button>
+      {open && (
+        <>
+          {/* click-away layer */}
+          <span className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <span
+            role="dialog"
+            className="absolute left-0 z-30 mt-2 block w-72 rounded-xl border border-slate-700 bg-slate-900 p-3 text-left shadow-xl shadow-black/40"
+          >
+            <span className="block text-xs font-semibold text-emerald-300">Confidence (0–100%)</span>
+            <span className="mt-0.5 block text-xs leading-relaxed text-slate-400">
+              How strong the pattern is — its effect size scaled by how many rows back it.
+              Higher means the signal stands out from noise.
+            </span>
+            <span className="mt-2 block text-xs font-semibold text-emerald-300">Trust score (0–100)</span>
+            <span className="mt-0.5 block text-xs leading-relaxed text-slate-400">
+              How much to rely on the number overall. It blends sample size, how complete
+              the columns are, and how consistent the values are.
+            </span>
+            <span className="mt-2 block text-[11px] leading-relaxed text-slate-500">
+              Green = high · amber = medium · grey/red = low — treat low scores as directional,
+              not conclusive.
+            </span>
+          </span>
+        </>
+      )}
+    </span>
+  );
+}
+
 // Render one supporting metric value — scalars nicely, nested structures compactly.
 function MetricValue({ value }) {
   if (value !== null && typeof value === "object") {
@@ -251,6 +298,18 @@ function EvidenceDrawer({ datasetId, filtersParam, insight, onClose, onHighlight
               </p>
             ) : rowsQuery.isLoading ? (
               <Spinner label="Loading the proof rows…" />
+            ) : rowsQuery.isError ? (
+              <div className="rounded-lg border border-red-900 bg-red-950/40 p-3">
+                <p className="text-sm text-red-200">Couldn’t load the proof rows.</p>
+                <p className="mt-1 text-xs text-red-300">{rowsQuery.error.message}</p>
+                <button
+                  type="button"
+                  onClick={() => rowsQuery.refetch()}
+                  className="mt-2 inline-flex items-center rounded-md border border-red-700/70 bg-red-900/40 px-3 py-1 text-xs font-medium text-red-100 transition hover:bg-red-900/70"
+                >
+                  Retry
+                </button>
+              </div>
             ) : (
               <div className="overflow-x-auto rounded-lg border border-slate-800">
                 <table className="w-full text-left text-xs">
@@ -369,6 +428,9 @@ export default function EvidenceMode({ dataset, columns, filters = [], filtersPa
               see the exact numbers and rows that back it.
               {isFetching && <span className="ml-2 text-slate-500">Refreshing…</span>}
             </p>
+            <div className="mt-2">
+              <ScoreInfo />
+            </div>
           </div>
           <div className="flex flex-col items-end gap-2">
             <div>
