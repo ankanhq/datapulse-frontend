@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../supabase";
 import Spinner from "./Spinner";
+
+const RESEND_COOLDOWN_S = 30;
 
 // Premium, centered sign-in card on the app's dark background.
 // Auth is passwordless: Supabase email OTP (email → 6-digit code → signed in),
@@ -38,9 +40,25 @@ export default function Login() {
   const [step, setStep] = useState("email"); // "email" | "code"
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
-  const [busy, setBusy] = useState(null); // "otp" | "verify" | "google" | null
+  const [busy, setBusy] = useState(null); // "otp" | "verify" | "google" | "resend" | null
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [resendIn, setResendIn] = useState(0); // seconds left on the resend cooldown
+
+  // Tick the resend cooldown down to zero.
+  useEffect(() => {
+    if (resendIn <= 0) return undefined;
+    const t = setTimeout(() => setResendIn((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendIn]);
+
+  async function requestOtp(addr) {
+    const { error } = await supabase.auth.signInWithOtp({
+      email: addr,
+      options: { shouldCreateUser: true },
+    });
+    if (error) throw error;
+  }
 
   async function sendCode(e) {
     e?.preventDefault();
@@ -52,15 +70,27 @@ export default function Login() {
     }
     setBusy("otp");
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: addr,
-        options: { shouldCreateUser: true },
-      });
-      if (error) throw error;
+      await requestOtp(addr);
       setStep("code");
-      setNotice(`We sent a 6-digit code to ${addr}.`);
+      setNotice(`We sent a code to ${addr}.`);
+      setResendIn(RESEND_COOLDOWN_S);
     } catch (err) {
       setError(err?.message || "Could not send the code. Please try again.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function resendCode() {
+    if (resendIn > 0 || busy) return;
+    setError("");
+    setBusy("resend");
+    try {
+      await requestOtp(email.trim());
+      setNotice("Code sent — check your email.");
+      setResendIn(RESEND_COOLDOWN_S);
+    } catch (err) {
+      setError(err?.message || "Could not resend the code. Please try again.");
     } finally {
       setBusy(null);
     }
@@ -69,9 +99,11 @@ export default function Login() {
   async function verify(e) {
     e?.preventDefault();
     setError("");
-    const token = code.trim();
-    if (!/^\d{6}$/.test(token)) {
-      setError("Enter the 6-digit code from your email.");
+    // Accept the code exactly as emailed: strip spaces, allow any length Supabase
+    // uses (6 or 8 digits) up to 10. Never truncate it.
+    const token = code.replace(/\s+/g, "");
+    if (!/^\d{4,10}$/.test(token)) {
+      setError("Enter the code from your email.");
       return;
     }
     setBusy("verify");
@@ -171,6 +203,9 @@ export default function Login() {
         ) : (
           <form onSubmit={verify} className="mt-6 space-y-3">
             {notice && <p className="text-center text-xs text-emerald-400">{notice}</p>}
+            <label htmlFor="otp-code" className="block text-xs font-medium text-slate-400">
+              Enter the code from your email
+            </label>
             <div className="relative">
               <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-500">
                 <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
@@ -179,16 +214,17 @@ export default function Login() {
                 </svg>
               </span>
               <input
+                id="otp-code"
                 type="text"
                 inputMode="numeric"
                 autoFocus
                 autoComplete="one-time-code"
-                maxLength={6}
+                maxLength={10}
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                placeholder="123456"
-                aria-label="6-digit code"
-                className={`${inputBase} pl-10 pr-3 tracking-[0.4em]`}
+                placeholder="Enter the code from your email"
+                aria-label="Code from your email"
+                className={`${inputBase} pl-10 pr-3 tracking-widest`}
               />
             </div>
             <button type="submit" disabled={!!busy} className={primaryBtn}>
@@ -196,7 +232,19 @@ export default function Login() {
             </button>
             <button
               type="button"
-              onClick={() => { setStep("email"); setCode(""); setError(""); setNotice(""); }}
+              onClick={resendCode}
+              disabled={resendIn > 0 || !!busy}
+              className="w-full text-center text-xs font-medium text-pulse-400 transition hover:text-pulse-300 disabled:cursor-not-allowed disabled:text-slate-500"
+            >
+              {busy === "resend"
+                ? "Sending…"
+                : resendIn > 0
+                ? `Resend code in ${resendIn}s`
+                : "Resend code"}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setStep("email"); setCode(""); setError(""); setNotice(""); setResendIn(0); }}
               className="w-full text-center text-xs text-slate-400 transition hover:text-slate-200"
             >
               Use a different email
