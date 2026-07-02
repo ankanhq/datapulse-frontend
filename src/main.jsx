@@ -2,6 +2,7 @@ import React, { lazy, Suspense } from "react";
 import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import App from "./App.jsx";
+import AuthGate from "./AuthGate.jsx";
 import Layout from "./components/Layout";
 import Spinner from "./components/Spinner";
 import "./index.css";
@@ -24,14 +25,19 @@ const queryClient = new QueryClient({
 // for a single extra route; the Vercel rewrite makes the deep link resolve.)
 const reportMatch = window.location.pathname.match(/^\/report\/([0-9a-f]{32})\/?$/);
 
+// The entire app — including the report route — is gated behind auth.
 const root = reportMatch ? (
-  <Layout>
-    <Suspense fallback={<Spinner label="Loading shared report…" className="mt-8" />}>
-      <ReportView token={reportMatch[1]} />
-    </Suspense>
-  </Layout>
+  <AuthGate>
+    {({ user, signOut }) => (
+      <Layout user={user} onSignOut={signOut}>
+        <Suspense fallback={<Spinner label="Loading shared report…" className="mt-8" />}>
+          <ReportView token={reportMatch[1]} />
+        </Suspense>
+      </Layout>
+    )}
+  </AuthGate>
 ) : (
-  <App />
+  <AuthGate>{({ user, signOut }) => <App user={user} onSignOut={signOut} />}</AuthGate>
 );
 
 ReactDOM.createRoot(document.getElementById("root")).render(

@@ -5,6 +5,8 @@
 // scoped to a dataset id returned by the upload/sample calls, so each visitor
 // only ever touches their own data.
 
+import { getAccessToken } from "./supabase";
+
 export const API_BASE = (
   import.meta.env.VITE_API_BASE || "http://localhost:8000"
 ).replace(/\/$/, "");
@@ -79,7 +81,11 @@ async function requestJson(url, options = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
     emitSlow();
   }, SLOW_AFTER_MS);
   try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
+    // Attach the Supabase access token so the backend can authenticate the user.
+    const token = await getAccessToken();
+    const headers = { ...(options.headers || {}) };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(url, { ...options, headers, signal: controller.signal });
     return handle(res);
   } catch (e) {
     if (e?.name === "AbortError") {

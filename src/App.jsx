@@ -43,7 +43,7 @@ function TabButton({ active, onClick, children }) {
   );
 }
 
-export default function App() {
+export default function App({ user = null, onSignOut = null }) {
   // The active dataset: { dataset_id, name, source, row_count, columns } | null.
   const [dataset, setDataset] = useState(null);
   const [view, setView] = useState("dashboard"); // "dashboard" | "evidence"
@@ -94,7 +94,7 @@ export default function App() {
 
   if (!dataset) {
     return (
-      <Layout>
+      <Layout user={user} onSignOut={onSignOut}>
         <UploadLanding onLoaded={loadDataset} onPrepareDashboard={preloadDashboard} />
       </Layout>
     );
@@ -103,7 +103,7 @@ export default function App() {
   const filtersParam = filters.length ? JSON.stringify(filters) : undefined;
 
   return (
-    <Layout>
+    <Layout user={user} onSignOut={onSignOut}>
       {/* Active dataset bar */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
         <div className="min-w-0">

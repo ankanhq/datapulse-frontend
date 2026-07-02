@@ -1,6 +1,6 @@
 import ColdStartBanner from "./ColdStartBanner";
 
-export default function Layout({ children }) {
+export default function Layout({ children, user = null, onSignOut = null }) {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <ColdStartBanner />
@@ -18,6 +18,23 @@ export default function Layout({ children }) {
             </h1>
             <p className="text-xs text-slate-400">Upload a CSV or Excel file and explore it instantly</p>
           </div>
+          {user && (
+            <div className="ml-auto flex items-center gap-3">
+              <span className="hidden max-w-[40vw] truncate text-sm text-slate-400 sm:inline" title={user.email}>
+                {user.email}
+              </span>
+              <button
+                type="button"
+                onClick={onSignOut}
+                className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-100 transition hover:bg-slate-700"
+              >
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M16 17l5-5-5-5M21 12H9M12 19H6a2 2 0 01-2-2V7a2 2 0 012-2h6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Sign out
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
