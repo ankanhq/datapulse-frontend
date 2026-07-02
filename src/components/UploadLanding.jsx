@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { uploadDataset, pasteDataset, loadSampleDataset, API_BASE } from "../api";
 import Spinner from "./Spinner";
+import useColdStart from "../useColdStart";
+
+// Label shown on any in-flight action once the request looks like a cold start.
+const WAKING_LABEL = "Waking up the server… (~30s)";
 
 // Client-side guard mirroring the backend's limit, so oversized input fails
 // instantly with a friendly message instead of a wasted request.
@@ -49,6 +53,7 @@ export default function UploadLanding({ onLoaded, onPrepareDashboard }) {
   const [busy, setBusy] = useState(null); // "upload" | "paste" | "sample" | null
   const [error, setError] = useState("");
   const [retryAction, setRetryAction] = useState(null);
+  const waking = useColdStart();
 
   // Shared error handling for every load path.
   async function onLoad(fn, retry) {
@@ -204,7 +209,7 @@ export default function UploadLanding({ onLoaded, onPrepareDashboard }) {
             onChange={(e) => handleFile(e.target.files?.[0])}
           />
           {busy === "upload" ? (
-            <Spinner label="Uploading & analyzing…" />
+            <Spinner label={waking ? WAKING_LABEL : "Uploading & analyzing…"} />
           ) : (
             <>
               <svg viewBox="0 0 24 24" className="mb-3 h-10 w-10 text-slate-500" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -241,7 +246,7 @@ export default function UploadLanding({ onLoaded, onPrepareDashboard }) {
               disabled={!!busy}
               className="inline-flex items-center gap-2 rounded-md bg-pulse-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-pulse-600 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {busy === "paste" ? <Spinner label="Analyzing…" /> : "Analyze pasted data"}
+              {busy === "paste" ? <Spinner label={waking ? WAKING_LABEL : "Analyzing…"} /> : "Analyze pasted data"}
             </button>
           </div>
         </div>
@@ -273,7 +278,7 @@ export default function UploadLanding({ onLoaded, onPrepareDashboard }) {
           disabled={!!busy}
           className="inline-flex items-center gap-2 rounded-md bg-pulse-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-pulse-600 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {busy === "sample" ? <Spinner label="Loading sample…" /> : "Try with sample data"}
+          {busy === "sample" ? <Spinner label={waking ? WAKING_LABEL : "Loading sample…"} /> : "Try with sample data"}
         </button>
       </div>
 

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { fetchInsights, fetchRows, createReport } from "../api";
 import Spinner from "./Spinner";
+import useColdStart from "../useColdStart";
 
 // Evidence Mode — a trustworthy, evidence-backed data story. Every card here is
 // rendered straight from numbers the backend computed (insights.py); nothing is
@@ -288,6 +289,7 @@ export default function EvidenceMode({ dataset, columns, filters = [], filtersPa
   const [shareUrl, setShareUrl] = useState("");
   const [shareError, setShareError] = useState("");
   const [copied, setCopied] = useState(false);
+  const waking = useColdStart();
 
   const { data, isLoading, isError, error, isFetching, refetch } = useQuery({
     queryKey: ["insights", dataset.dataset_id, mode, filtersParam ?? null],
@@ -458,7 +460,13 @@ export default function EvidenceMode({ dataset, columns, filters = [], filtersPa
         </div>
       ) : isLoading ? (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-8">
-          <Spinner label="Computing evidence-backed insights…" />
+          <Spinner
+            label={
+              waking
+                ? "Waking up the server… (~30s on the free tier)"
+                : "Computing evidence-backed insights…"
+            }
+          />
         </div>
       ) : data ? (
         <>

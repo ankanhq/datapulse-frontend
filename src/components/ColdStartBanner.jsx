@@ -21,7 +21,7 @@ export default function ColdStartBanner() {
         <span className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-slate-600 border-t-pulse-500" />
         <div className="min-w-0">
           <p className="text-sm font-medium text-slate-100">Waking up the server…</p>
-          <p className="text-xs text-slate-400">This can take up to a minute on the free tier.</p>
+          <p className="text-xs text-slate-400">This takes about 30 seconds on the free tier.</p>
         </div>
       </div>
     </div>
