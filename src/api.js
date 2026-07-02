@@ -122,6 +122,20 @@ export async function loadSampleDataset() {
   return requestJson(`${API_BASE}/datasets/sample`, { method: "POST" }, LOAD_TIMEOUT_MS);
 }
 
+/** Load a public CSV URL (e.g. a Google Sheet published to the web as CSV). */
+export async function loadUrlDataset(url, name) {
+  return requestJson(`${API_BASE}/datasets/url`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url, name }),
+  }, LOAD_TIMEOUT_MS);
+}
+
+/** Re-fetch a URL-backed dataset's source; returns the refreshed dataset. */
+export async function refreshDataset(id) {
+  return requestJson(`${API_BASE}/datasets/${id}/refresh`, { method: "POST" }, LOAD_TIMEOUT_MS);
+}
+
 export const fetchSummary = (id) =>
   requestJson(`${API_BASE}/datasets/${id}/summary`);
 

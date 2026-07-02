@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { uploadDataset, pasteDataset, loadSampleDataset, API_BASE } from "../api";
+import { uploadDataset, pasteDataset, loadSampleDataset, loadUrlDataset, API_BASE } from "../api";
 import Spinner from "./Spinner";
 import useColdStart from "../useColdStart";
 
@@ -47,10 +47,11 @@ function Feature({ title, body }) {
 
 export default function UploadLanding({ onLoaded, onPrepareDashboard }) {
   const inputRef = useRef(null);
-  const [mode, setMode] = useState("file"); // "file" | "paste"
+  const [mode, setMode] = useState("file"); // "file" | "paste" | "url"
   const [dragging, setDragging] = useState(false);
   const [pasteText, setPasteText] = useState("");
-  const [busy, setBusy] = useState(null); // "upload" | "paste" | "sample" | null
+  const [sheetUrl, setSheetUrl] = useState("");
+  const [busy, setBusy] = useState(null); // "upload" | "paste" | "url" | "sample" | null
   const [error, setError] = useState("");
   const [retryAction, setRetryAction] = useState(null);
   const waking = useColdStart();
@@ -109,6 +110,28 @@ export default function UploadLanding({ onLoaded, onPrepareDashboard }) {
     try {
       const text = pasteText;
       const ds = await onLoad(() => pasteDataset(text, "Pasted data"), () => handlePaste());
+      if (ds) onLoaded(ds);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleUrl() {
+    setError("");
+    setRetryAction(null);
+    const url = sheetUrl.trim();
+    if (!url) {
+      setError("Paste the published CSV link first.");
+      return;
+    }
+    if (!/^https?:\/\//i.test(url)) {
+      setError("That link should start with http:// or https://.");
+      return;
+    }
+    onPrepareDashboard?.();
+    setBusy("url");
+    try {
+      const ds = await onLoad(() => loadUrlDataset(url, "Google Sheet"), () => handleUrl());
       if (ds) onLoaded(ds);
     } finally {
       setBusy(null);
@@ -180,6 +203,9 @@ export default function UploadLanding({ onLoaded, onPrepareDashboard }) {
         <button type="button" className={tabClass(mode === "paste")} onClick={() => { setMode("paste"); setError(""); }}>
           Paste data
         </button>
+        <button type="button" className={tabClass(mode === "url")} onClick={() => { setMode("url"); setError(""); }}>
+          Google Sheet (link)
+        </button>
       </div>
 
       {mode === "file" ? (
@@ -224,7 +250,7 @@ export default function UploadLanding({ onLoaded, onPrepareDashboard }) {
             </>
           )}
         </div>
-      ) : (
+      ) : mode === "paste" ? (
         /* Paste box */
         <div className="rounded-2xl border border-slate-700 bg-slate-900/40 p-4">
           <textarea
@@ -248,6 +274,46 @@ export default function UploadLanding({ onLoaded, onPrepareDashboard }) {
             >
               {busy === "paste" ? <Spinner label={waking ? WAKING_LABEL : "Analyzing…"} /> : "Analyze pasted data"}
             </button>
+          </div>
+        </div>
+      ) : (
+        /* Google Sheet (published CSV link) */
+        <div className="rounded-2xl border border-slate-700 bg-slate-900/40 p-4">
+          <label className="block text-sm font-medium text-slate-200">Published CSV link</label>
+          <p className="mt-1 text-xs text-slate-400">
+            In Google Sheets: <span className="text-slate-300">File → Share → Publish to web → </span>
+            choose the sheet, pick <span className="text-slate-300">Comma-separated values (.csv)</span>,
+            then paste the link here. It loads like an upload, and you can refresh it anytime.
+          </p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <input
+              type="url"
+              inputMode="url"
+              value={sheetUrl}
+              onChange={(e) => setSheetUrl(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !busy && handleUrl()}
+              disabled={busy === "url"}
+              spellCheck={false}
+              placeholder="https://docs.google.com/spreadsheets/d/e/…/pub?output=csv"
+              className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-pulse-500 focus:outline-none focus:ring-1 focus:ring-pulse-500"
+            />
+            <button
+              type="button"
+              onClick={handleUrl}
+              disabled={!!busy}
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-pulse-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-pulse-600 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {busy === "url" ? <Spinner label={waking ? WAKING_LABEL : "Loading sheet…"} /> : "Load sheet"}
+            </button>
+          </div>
+          <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-700/40 bg-amber-950/30 p-2.5">
+            <svg viewBox="0 0 24 24" className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 9v4m0 4h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <p className="text-xs leading-relaxed text-amber-200/90">
+              A “Publish to web” link is <span className="font-medium">public</span> — anyone with it
+              can read the data. Use this only for personal or non-confidential sheets.
+            </p>
           </div>
         </div>
       )}

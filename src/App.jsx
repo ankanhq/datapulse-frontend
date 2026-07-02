@@ -1,7 +1,9 @@
 import { lazy, Suspense, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import Layout from "./components/Layout";
 import UploadLanding from "./components/UploadLanding";
 import Spinner from "./components/Spinner";
+import { refreshDataset } from "./api";
 
 const loadSummaryPanel = () => import("./components/SummaryPanel");
 const loadAdaptiveChart = () => import("./components/AdaptiveChart");
@@ -53,12 +55,32 @@ export default function App() {
   const [highlight, setHighlight] = useState(null); // { rowIds:number[], label } | null
 
   const tableRef = useRef(null);
+  const queryClient = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState("");
 
   function loadDataset(ds) {
     setDataset(ds);
     setFilters([]);
     setHighlight(null);
     setView("dashboard");
+  }
+
+  async function handleRefresh() {
+    if (refreshing || !dataset) return;
+    setRefreshing(true);
+    setRefreshError("");
+    try {
+      const ds = await refreshDataset(dataset.dataset_id);
+      setDataset(ds); // updated row_count / columns
+      setHighlight(null);
+      // Data changed under the same id — drop cached summary/chart/table/insights.
+      queryClient.invalidateQueries();
+    } catch (e) {
+      setRefreshError(e.message || "Refresh failed.");
+    } finally {
+      setRefreshing(false);
+    }
   }
 
   function showEvidenceInTable(rowIds, label) {
@@ -85,28 +107,50 @@ export default function App() {
       {/* Active dataset bar */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-slate-100" title={dataset.name}>
+          <p className="truncate text-sm font-medium text-slate-100" title={dataset.source_url || dataset.name}>
             {dataset.name}
             {dataset.source === "sample" && (
               <span className="ml-2 rounded bg-pulse-500/15 px-1.5 py-0.5 text-[10px] uppercase text-pulse-400">
                 sample
               </span>
             )}
+            {dataset.source === "url" && (
+              <span className="ml-2 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] uppercase text-emerald-300">
+                linked
+              </span>
+            )}
           </p>
           <p className="text-xs text-slate-400">
             {dataset.row_count.toLocaleString()} rows · {dataset.columns.length} columns
+            {refreshError && <span className="ml-2 text-red-400">· {refreshError}</span>}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setDataset(null)}
-          className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-100 transition hover:bg-slate-700"
-        >
-          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          New upload
-        </button>
+        <div className="flex items-center gap-2">
+          {dataset.source === "url" && (
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              title="Re-pull the latest data from the linked source"
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-100 transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <svg viewBox="0 0 24 24" className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20 11A8 8 0 006 5.3L4 7m0 0V3m0 4h4m-4 6a8 8 0 0014 4.7l2-1.7m0 0v4m0-4h-4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {refreshing ? "Refreshing…" : "Refresh from source"}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setDataset(null)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-100 transition hover:bg-slate-700"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            New upload
+          </button>
+        </div>
       </div>
 
       {/* View tabs */}
