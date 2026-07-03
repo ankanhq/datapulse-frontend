@@ -26,7 +26,12 @@ export default function Layout({ children, user = null, onSignOut = null }) {
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">{children}</main>
 
       <footer className="border-t border-slate-800 py-6 text-center text-xs text-slate-500">
-        DataPulse · DuckDB + FastAPI + React
+        <p>DataPulse · DuckDB + FastAPI + React</p>
+        <p className="mt-1">
+          <a href="/privacy" className="transition hover:text-slate-300">Privacy</a>
+          <span className="mx-1.5">·</span>
+          <a href="/terms" className="transition hover:text-slate-300">Terms</a>
+        </p>
       </footer>
     </div>
   );

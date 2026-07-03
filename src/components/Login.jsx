@@ -122,9 +122,9 @@ export default function Login() {
             No passwords — sign in with an account you already have.
           </p>
           <p className="mt-1 text-xs text-slate-600">
-            <a href="#" className="hover:text-slate-400">Terms</a>
+            <a href="/terms" className="hover:text-slate-400">Terms</a>
             <span className="mx-1.5">·</span>
-            <a href="#" className="hover:text-slate-400">Privacy</a>
+            <a href="/privacy" className="hover:text-slate-400">Privacy</a>
           </p>
         </div>
       </div>

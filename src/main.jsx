@@ -5,6 +5,7 @@ import App from "./App.jsx";
 import AuthGate from "./AuthGate.jsx";
 import Layout from "./components/Layout";
 import Spinner from "./components/Spinner";
+import LegalPage from "./components/LegalPage";
 import { ensureAuthReady } from "./supabase";
 import "./index.css";
 
@@ -53,7 +54,19 @@ function render() {
   );
 }
 
-// Process any OAuth return (exchange the PKCE code for a session and scrub the
-// callback params) BEFORE the app renders. `.finally` guarantees we still render
-// even if session resolution fails — AuthGate then shows the login screen.
-ensureAuthReady().finally(render);
+// Public legal pages: /privacy and /terms render on their own, outside the
+// AuthGate, so signed-out visitors (e.g. from the login footer) can read them
+// without signing in. Checked before anything auth-related.
+const legalPath = window.location.pathname.replace(/\/+$/, "") || "/";
+if (legalPath === "/privacy" || legalPath === "/terms") {
+  ReactDOM.createRoot(document.getElementById("root")).render(
+    <React.StrictMode>
+      <LegalPage kind={legalPath === "/terms" ? "terms" : "privacy"} />
+    </React.StrictMode>
+  );
+} else {
+  // Process any OAuth return (exchange the PKCE code for a session and scrub the
+  // callback params) BEFORE the app renders. `.finally` guarantees we still render
+  // even if session resolution fails — AuthGate then shows the login screen.
+  ensureAuthReady().finally(render);
+}
