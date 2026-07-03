@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { supabase } from "../supabase";
 import Spinner from "./Spinner";
 
-const RESEND_COOLDOWN_S = 30;
-
 // Premium, centered sign-in card on the app's dark background.
-// Auth is passwordless: Supabase email OTP (email → 6-digit code → signed in),
-// plus a "Continue with Google" OAuth option. No phone login.
+// Auth is OAuth-only (no passwords, no email codes): "Continue with Google" and
+// "Continue with GitHub", both via Supabase PKCE. On return the AuthGate resolves
+// the session and drops the user straight into the app.
+
+const REDIRECT_TO = "https://datapulse-frontend.vercel.app";
 
 function LogoMark() {
   return (
@@ -29,110 +30,38 @@ function GoogleIcon() {
   );
 }
 
-const inputBase =
-  "w-full rounded-lg border border-slate-700 bg-slate-950/60 py-2.5 text-sm text-slate-100 " +
-  "placeholder:text-slate-600 focus:border-pulse-500 focus:outline-none focus:ring-1 focus:ring-pulse-500";
-const primaryBtn =
-  "w-full inline-flex items-center justify-center gap-2 rounded-lg bg-pulse-500 px-4 py-2.5 text-sm " +
-  "font-medium text-white transition hover:bg-pulse-600 disabled:cursor-not-allowed disabled:opacity-60";
+function GitHubIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden="true">
+      <path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.05.78 2.12v3.14c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5z" />
+    </svg>
+  );
+}
 
 export default function Login() {
-  const [step, setStep] = useState("email"); // "email" | "code"
-  const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
-  const [busy, setBusy] = useState(null); // "otp" | "verify" | "google" | "resend" | null
+  const [busy, setBusy] = useState(null); // "google" | "github" | null
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [resendIn, setResendIn] = useState(0); // seconds left on the resend cooldown
 
-  // Tick the resend cooldown down to zero.
-  useEffect(() => {
-    if (resendIn <= 0) return undefined;
-    const t = setTimeout(() => setResendIn((s) => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [resendIn]);
-
-  async function requestOtp(addr) {
-    const { error } = await supabase.auth.signInWithOtp({
-      email: addr,
-      options: { shouldCreateUser: true },
-    });
-    if (error) throw error;
-  }
-
-  async function sendCode(e) {
-    e?.preventDefault();
+  async function signInWith(provider) {
     setError("");
-    const addr = email.trim();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(addr)) {
-      setError("Enter a valid email address.");
-      return;
-    }
-    setBusy("otp");
-    try {
-      await requestOtp(addr);
-      setStep("code");
-      setNotice(`We sent a code to ${addr}.`);
-      setResendIn(RESEND_COOLDOWN_S);
-    } catch (err) {
-      setError(err?.message || "Could not send the code. Please try again.");
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function resendCode() {
-    if (resendIn > 0 || busy) return;
-    setError("");
-    setBusy("resend");
-    try {
-      await requestOtp(email.trim());
-      setNotice("Code sent — check your email.");
-      setResendIn(RESEND_COOLDOWN_S);
-    } catch (err) {
-      setError(err?.message || "Could not resend the code. Please try again.");
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function verify(e) {
-    e?.preventDefault();
-    setError("");
-    // Accept the code exactly as emailed: strip spaces, allow any length Supabase
-    // uses (6 or 8 digits) up to 10. Never truncate it.
-    const token = code.replace(/\s+/g, "");
-    if (!/^\d{4,10}$/.test(token)) {
-      setError("Enter the code from your email.");
-      return;
-    }
-    setBusy("verify");
-    try {
-      const { error } = await supabase.auth.verifyOtp({ email: email.trim(), token, type: "email" });
-      if (error) throw error;
-      // On success the onAuthStateChange listener in AuthGate swaps in the app.
-    } catch (err) {
-      setError(err?.message || "That code didn't work. Request a new one and try again.");
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function signInWithGoogle() {
-    setError("");
-    setBusy("google");
+    setBusy(provider);
     try {
       const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo: "https://datapulse-frontend.vercel.app" },
+        provider,
+        options: { redirectTo: REDIRECT_TO },
       });
       if (error) throw error;
-      // Browser redirects to Google; no further UI needed here.
+      // Browser redirects to the provider; no further UI needed here.
     } catch (err) {
-      setError(err?.message || "Could not start Google sign-in. Please try again.");
+      const label = provider === "google" ? "Google" : "GitHub";
+      setError(err?.message || `Could not start ${label} sign-in. Please try again.`);
       setBusy(null);
     }
   }
+
+  const oauthBtn =
+    "w-full inline-flex items-center justify-center gap-2.5 rounded-lg px-4 py-2.5 text-sm " +
+    "font-medium transition disabled:cursor-not-allowed disabled:opacity-60";
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 px-4 py-10">
@@ -152,111 +81,45 @@ export default function Login() {
           Sign in to explore your data — private to your account.
         </p>
 
-        {step === "email" ? (
-          <div className="mt-6 space-y-4">
-            <form onSubmit={sendCode} className="space-y-3">
-              <div className="relative">
-                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-500">
-                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="3" y="5" width="18" height="14" rx="2" />
-                    <path d="M3 7l9 6 9-6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                <input
-                  type="email"
-                  autoFocus
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  className={`${inputBase} pl-10 pr-3`}
-                  aria-label="Email address"
-                />
-              </div>
-              <button type="submit" disabled={!!busy} className={primaryBtn}>
-                {busy === "otp" ? <Spinner label="Sending…" /> : "Continue"}
-              </button>
-            </form>
+        <div className="mt-6 space-y-3">
+          <button
+            type="button"
+            onClick={() => signInWith("google")}
+            disabled={!!busy}
+            className={`${oauthBtn} border border-slate-300 bg-white text-slate-800 hover:bg-slate-100`}
+          >
+            {busy === "google" ? (
+              <Spinner label="Redirecting…" />
+            ) : (
+              <>
+                <GoogleIcon />
+                Continue with Google
+              </>
+            )}
+          </button>
 
-            <div className="flex items-center gap-3">
-              <span className="h-px flex-1 bg-slate-800" />
-              <span className="text-xs uppercase tracking-wide text-slate-500">or</span>
-              <span className="h-px flex-1 bg-slate-800" />
-            </div>
-
-            <button
-              type="button"
-              onClick={signInWithGoogle}
-              disabled={!!busy}
-              className="w-full inline-flex items-center justify-center gap-2.5 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {busy === "google" ? (
-                <Spinner label="Redirecting…" />
-              ) : (
-                <>
-                  <GoogleIcon />
-                  Continue with Google
-                </>
-              )}
-            </button>
-          </div>
-        ) : (
-          <form onSubmit={verify} className="mt-6 space-y-3">
-            {notice && <p className="text-center text-xs text-emerald-400">{notice}</p>}
-            <label htmlFor="otp-code" className="block text-xs font-medium text-slate-400">
-              Enter the code from your email
-            </label>
-            <div className="relative">
-              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-500">
-                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="4" y="10" width="16" height="10" rx="2" />
-                  <path d="M8 10V7a4 4 0 018 0v3" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-              <input
-                id="otp-code"
-                type="text"
-                inputMode="numeric"
-                autoFocus
-                autoComplete="one-time-code"
-                maxLength={10}
-                value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                placeholder="Enter the code from your email"
-                aria-label="Code from your email"
-                className={`${inputBase} pl-10 pr-3 tracking-widest`}
-              />
-            </div>
-            <button type="submit" disabled={!!busy} className={primaryBtn}>
-              {busy === "verify" ? <Spinner label="Verifying…" /> : "Verify & sign in"}
-            </button>
-            <button
-              type="button"
-              onClick={resendCode}
-              disabled={resendIn > 0 || !!busy}
-              className="w-full text-center text-xs font-medium text-pulse-400 transition hover:text-pulse-300 disabled:cursor-not-allowed disabled:text-slate-500"
-            >
-              {busy === "resend"
-                ? "Sending…"
-                : resendIn > 0
-                ? `Resend code in ${resendIn}s`
-                : "Resend code"}
-            </button>
-            <button
-              type="button"
-              onClick={() => { setStep("email"); setCode(""); setError(""); setNotice(""); setResendIn(0); }}
-              className="w-full text-center text-xs text-slate-400 transition hover:text-slate-200"
-            >
-              Use a different email
-            </button>
-          </form>
-        )}
+          <button
+            type="button"
+            onClick={() => signInWith("github")}
+            disabled={!!busy}
+            className={`${oauthBtn} border border-slate-700 bg-[#1f2328] text-white hover:bg-[#2a3037]`}
+          >
+            {busy === "github" ? (
+              <Spinner label="Redirecting…" />
+            ) : (
+              <>
+                <GitHubIcon />
+                Continue with GitHub
+              </>
+            )}
+          </button>
+        </div>
 
         {error && <p className="mt-4 text-center text-sm text-red-400">{error}</p>}
 
         <div className="mt-6 border-t border-slate-800 pt-4 text-center">
           <p className="text-xs text-slate-500">
-            We'll email you a one-time code — no password to remember.
+            No passwords — sign in with an account you already have.
           </p>
           <p className="mt-1 text-xs text-slate-600">
             <a href="#" className="hover:text-slate-400">Terms</a>

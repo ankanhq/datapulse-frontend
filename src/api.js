@@ -179,3 +179,8 @@ export const fetchReport = (token) => requestJson(`${API_BASE}/reports/${token}`
 // the browser downloads it directly to disk.
 export const exportUrl = (id, params) =>
   `${API_BASE}/datasets/${id}/export${toQuery(params)}`;
+
+/** Permanently delete the signed-in user's datasets, reports and account (GDPR).
+ *  The backend authenticates the caller and only ever deletes their own data. */
+export const deleteAccount = () =>
+  requestJson(`${API_BASE}/account`, { method: "DELETE" });
