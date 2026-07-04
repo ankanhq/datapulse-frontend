@@ -3,7 +3,7 @@
 // (no API/auth needed). Styled to match the app's dark theme.
 
 const UPDATED = "July 3, 2026";
-const CONTACT = "chowdhuryankan808@gmail.com";
+const CONTACT = "datapulse.support@gmail.com";
 
 function Shell({ title, children }) {
   return (
