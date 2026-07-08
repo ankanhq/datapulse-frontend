@@ -193,6 +193,22 @@ export default function UploadLanding({ onLoaded, onPrepareDashboard }) {
           you live summary stats, a sortable/filterable table, adaptive charts, and CSV
           export — no setup, no account.
         </p>
+        {/* Quick-glance value line: an at-a-glance summary above the fold; the
+            detailed feature cards still live at the bottom of the page. */}
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+          {[
+            "📊 Instant charts",
+            "🔎 Plain-English insights",
+            "🔒 Private — nothing stored",
+          ].map((label) => (
+            <span
+              key={label}
+              className="inline-flex items-center rounded-full border border-slate-800 bg-slate-900/60 px-3 py-1 text-xs font-medium text-slate-300"
+            >
+              {label}
+            </span>
+          ))}
+        </div>
       </div>
 
       {/* Mode toggle */}
