@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import Layout from "./components/Layout";
 import UploadLanding from "./components/UploadLanding";
 import Spinner from "./components/Spinner";
-import { refreshDataset } from "./api";
+import { refreshDataset, setAutoRefresh } from "./api";
 
 const loadSummaryPanel = () => import("./components/SummaryPanel");
 const loadAdaptiveChart = () => import("./components/AdaptiveChart");
@@ -23,6 +23,26 @@ function preloadDashboard() {
   loadCompareMode();
   loadDataTable();
   loadEvidenceMode();
+}
+
+/** "3 minutes ago" from an epoch-seconds timestamp (the shape the API returns
+ *  for last_refreshed_at). Returns "" when there's no timestamp. */
+function timeAgo(epochSeconds) {
+  if (!epochSeconds) return "";
+  const secs = Math.max(0, Math.floor(Date.now() / 1000 - epochSeconds));
+  if (secs < 45) return "just now";
+  const units = [
+    ["day", 86400],
+    ["hour", 3600],
+    ["minute", 60],
+  ];
+  for (const [label, size] of units) {
+    if (secs >= size) {
+      const n = Math.floor(secs / size);
+      return `${n} ${label}${n === 1 ? "" : "s"} ago`;
+    }
+  }
+  return "just now";
 }
 
 function TabButton({ active, onClick, children }) {
@@ -58,6 +78,7 @@ export default function App({ user = null, onSignOut = null }) {
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState("");
+  const [savingAuto, setSavingAuto] = useState(false);
 
   function loadDataset(ds) {
     setDataset(ds);
@@ -72,7 +93,8 @@ export default function App({ user = null, onSignOut = null }) {
     setRefreshError("");
     try {
       const ds = await refreshDataset(dataset.dataset_id);
-      setDataset(ds); // updated row_count / columns
+      // Preserve the auto-refresh choice if the response omits it.
+      setDataset({ auto_refresh: dataset.auto_refresh, ...ds });
       setHighlight(null);
       // Data changed under the same id — drop cached summary/chart/table/insights.
       queryClient.invalidateQueries();
@@ -80,6 +102,24 @@ export default function App({ user = null, onSignOut = null }) {
       setRefreshError(e.message || "Refresh failed.");
     } finally {
       setRefreshing(false);
+    }
+  }
+
+  async function handleAutoRefreshChange(mode) {
+    if (!dataset || savingAuto) return;
+    const previous = dataset.auto_refresh || "off";
+    // Optimistic: reflect the choice immediately, roll back on failure.
+    setDataset((d) => ({ ...d, auto_refresh: mode }));
+    setSavingAuto(true);
+    setRefreshError("");
+    try {
+      const res = await setAutoRefresh(dataset.dataset_id, mode);
+      setDataset((d) => ({ ...d, auto_refresh: res.auto_refresh }));
+    } catch (e) {
+      setDataset((d) => ({ ...d, auto_refresh: previous }));
+      setRefreshError(e.message || "Could not change auto-refresh.");
+    } finally {
+      setSavingAuto(false);
     }
   }
 
@@ -122,10 +162,29 @@ export default function App({ user = null, onSignOut = null }) {
           </p>
           <p className="text-xs text-slate-400">
             {dataset.row_count.toLocaleString()} rows · {dataset.columns.length} columns
+            {dataset.source === "url" && dataset.last_refreshed_at && (
+              <span className="ml-2">· Last refreshed: {timeAgo(dataset.last_refreshed_at)}</span>
+            )}
             {refreshError && <span className="ml-2 text-red-400">· {refreshError}</span>}
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {dataset.source === "url" && (
+            <label className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-sm text-slate-300">
+              <span className="text-xs text-slate-400">Auto-refresh</span>
+              <select
+                value={dataset.auto_refresh || "off"}
+                onChange={(e) => handleAutoRefreshChange(e.target.value)}
+                disabled={savingAuto}
+                title="Automatically re-pull the latest data on a schedule"
+                className="bg-transparent text-sm font-medium text-slate-100 outline-none disabled:opacity-60"
+              >
+                <option value="off">Off</option>
+                <option value="hourly">Hourly</option>
+                <option value="daily">Daily</option>
+              </select>
+            </label>
+          )}
           {dataset.source === "url" && (
             <button
               type="button"

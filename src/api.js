@@ -142,6 +142,16 @@ export async function refreshDataset(id) {
   return requestJson(`${API_BASE}/datasets/${id}/refresh`, { method: "POST" }, LOAD_TIMEOUT_MS);
 }
 
+/** Set the auto-refresh cadence ('off' | 'hourly' | 'daily') for a URL-backed
+ *  dataset. Returns { dataset_id, auto_refresh, last_refreshed_at }. */
+export async function setAutoRefresh(id, mode) {
+  return requestJson(`${API_BASE}/datasets/${id}/auto-refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mode }),
+  });
+}
+
 export const fetchSummary = (id) =>
   requestJson(`${API_BASE}/datasets/${id}/summary`);
 
