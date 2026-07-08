@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { fetchInsights, fetchRows, createReport } from "../api";
 import Spinner from "./Spinner";
@@ -198,6 +199,7 @@ function InsightCard({ insight, onShowEvidence }) {
 
 function EvidenceDrawer({ datasetId, filtersParam, insight, onClose, onHighlightInTable }) {
   const rowIds = insight?.evidence_rows ?? [];
+  const panelRef = useRef(null);
   const rowsQuery = useQuery({
     queryKey: ["evidence-rows", datasetId, rowIds, filtersParam],
     queryFn: () => fetchRows(datasetId, rowIds, filtersParam),
@@ -205,13 +207,15 @@ function EvidenceDrawer({ datasetId, filtersParam, insight, onClose, onHighlight
     placeholderData: keepPreviousData,
   });
 
-  // Close on Escape; lock background scroll while open.
+  // Close on Escape, lock background scroll while open, and move focus into the
+  // drawer so keyboard users land inside the dialog.
   useEffect(() => {
     function onKey(e) {
       if (e.key === "Escape") onClose();
     }
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
+    panelRef.current?.focus();
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
@@ -223,7 +227,12 @@ function EvidenceDrawer({ datasetId, filtersParam, insight, onClose, onHighlight
   const cols = rowsQuery.data?.columns ?? [];
   const metrics = insight.supporting_metrics || {};
 
-  return (
+  // Portal into <body> so the fixed inset-0 overlay pins to the VIEWPORT. The
+  // Evidence section carries a lingering `transform` from its fade-in animation,
+  // and a transformed ancestor becomes the containing block for fixed-position
+  // descendants — which would otherwise anchor this drawer to the section (off
+  // screen for lower cards) instead of the viewport.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex justify-end">
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
@@ -231,10 +240,12 @@ function EvidenceDrawer({ datasetId, filtersParam, insight, onClose, onHighlight
         aria-hidden="true"
       />
       <div
+        ref={panelRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={`Evidence for ${insight.title}`}
-        className="animate-slide-in relative flex h-full w-full max-w-2xl flex-col border-l border-slate-800 bg-slate-950/95 shadow-2xl"
+        className="animate-slide-in relative flex h-full w-full max-w-2xl flex-col border-l border-slate-800 bg-slate-950/95 shadow-2xl focus:outline-none"
       >
         <div className="flex items-start justify-between gap-3 border-b border-slate-800 p-4">
           <div>
@@ -337,7 +348,8 @@ function EvidenceDrawer({ datasetId, filtersParam, insight, onClose, onHighlight
           </section>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
