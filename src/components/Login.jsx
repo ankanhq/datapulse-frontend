@@ -185,6 +185,9 @@ export default function Login() {
                 We sent a link to <span className="font-medium text-slate-200">{email.trim()}</span>.
                 Open it on this device to finish signing in.
               </p>
+              <p className="mt-2 text-center text-xs text-slate-500">
+                Don't see it? Check your spam or promotions folder.
+              </p>
 
               {notice && <p className="mt-3 text-center text-sm text-emerald-300">{notice}</p>}
               {error && <p className="mt-3 text-center text-sm text-red-400">{error}</p>}
