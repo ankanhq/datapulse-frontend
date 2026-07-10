@@ -11,6 +11,8 @@ import EvidencePreview from "./EvidencePreview";
 // On return the AuthGate resolves the session and drops the user into the app.
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Supabase emails a 6-digit token by default; allow the range GoTrue can issue.
+const CODE_RE = /^\d{4,8}$/;
 
 /** Turn a Supabase auth error into something a person can act on. */
 function friendlyAuthError(err, fallback) {
@@ -87,7 +89,9 @@ export default function Login() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
   const emailRef = useRef(null);
+  const codeRef = useRef(null);
 
   async function signInWith(provider) {
     setError("");
@@ -132,6 +136,32 @@ export default function Login() {
     }
   }
 
+  /** Verify the emailed code. The magic link in the same email still works. */
+  async function verifyCode(e) {
+    e.preventDefault();
+    const token = code.trim();
+    if (!CODE_RE.test(token)) {
+      setError("Enter the code from the email.");
+      codeRef.current?.focus();
+      return;
+    }
+    setError("");
+    setNotice("");
+    setBusy("verify");
+    try {
+      const { error: err } = await supabase.auth.verifyOtp({
+        email: email.trim(),
+        token,
+        type: "email",
+      });
+      if (err) throw err;
+      // onAuthStateChange in the AuthGate swaps this screen for the app.
+    } catch (err) {
+      setError(friendlyAuthError(err, "That code didn't work. Check it and try again."));
+      setBusy(null);
+    }
+  }
+
   /** Real anonymous session, so a visitor can use the whole app before deciding. */
   async function exploreAsGuest() {
     setError("");
@@ -150,6 +180,7 @@ export default function Login() {
     setView("options");
     setError("");
     setNotice("");
+    setCode("");
     setBusy(null);
   }
 
@@ -179,11 +210,11 @@ export default function Login() {
                 <MailIcon />
               </div>
               <h2 className="mt-4 text-center text-base font-semibold text-slate-100">
-                Check your email for your sign-in link
+                Enter the code we emailed you
               </h2>
               <p className="mt-1.5 text-center text-sm text-slate-400">
-                We sent a link to <span className="font-medium text-slate-200">{email.trim()}</span>.
-                Open it on this device to finish signing in.
+                We sent a code to <span className="font-medium text-slate-200">{email.trim()}</span>.
+                You can type it below, or open the link in the same email.
               </p>
               <p className="mt-2 text-center text-xs text-slate-500">
                 Don't see it? Check your spam or promotions folder.
@@ -192,14 +223,42 @@ export default function Login() {
               {notice && <p className="mt-3 text-center text-sm text-emerald-300">{notice}</p>}
               {error && <p className="mt-3 text-center text-sm text-red-400">{error}</p>}
 
-              <div className="mt-6 space-y-3">
+              <form className="mt-5" onSubmit={verifyCode} noValidate>
+                <label htmlFor="login-code" className="sr-only">
+                  Sign-in code
+                </label>
+                <input
+                  id="login-code"
+                  ref={codeRef}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={8}
+                  placeholder="123456"
+                  value={code}
+                  onChange={(e) => {
+                    setCode(e.target.value.replace(/\D/g, ""));
+                    if (error) setError("");
+                  }}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3.5 py-2.5 text-center text-lg tracking-widest text-slate-100 placeholder:text-slate-600 placeholder:tracking-widest focus:border-pulse-500 focus:outline-none focus:ring-1 focus:ring-pulse-500"
+                />
+                <button
+                  type="submit"
+                  disabled={!!busy}
+                  className={`${btn} mt-3 bg-pulse-500 text-white shadow-lg shadow-pulse-500/20 hover:bg-pulse-600`}
+                >
+                  {busy === "verify" ? <Spinner label="Verifying…" /> : "Verify & sign in"}
+                </button>
+              </form>
+
+              <div className="mt-3 space-y-3">
                 <button
                   type="button"
                   onClick={() => sendMagicLink("resend")}
                   disabled={!!busy}
                   className={`${btn} border border-slate-700 bg-slate-800 text-slate-100 hover:bg-slate-700`}
                 >
-                  {busy === "resend" ? <Spinner label="Sending…" /> : "Resend link"}
+                  {busy === "resend" ? <Spinner label="Sending…" /> : "Resend code"}
                 </button>
                 <button
                   type="button"
