@@ -289,7 +289,12 @@ function EvidenceDrawer({ datasetId, filtersParam, insight, onClose, onHighlight
 
           {/* The exact supporting rows */}
           <section>
-            <div className="mb-2 flex items-center justify-between gap-2">
+            {/* Sticks to the top of the scroll area so "Highlight in data table"
+                stays tappable while reading a long list of rows. The negative
+                inset/offset cancel the scroll container's p-4 so the opaque
+                backing spans the full width and pins flush against the drawer
+                header — otherwise rows scroll through the padding gap above it. */}
+            <div className="sticky -top-4 z-10 -mx-4 mb-2 flex items-center justify-between gap-2 bg-slate-950/95 px-4 py-2 backdrop-blur">
               <h4 className="text-sm font-semibold text-slate-200">
                 Supporting rows{rowIds.length ? ` (${rowIds.length})` : ""}
               </h4>
