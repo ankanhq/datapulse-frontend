@@ -13,6 +13,8 @@ import EvidencePreview from "./EvidencePreview";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Supabase emails a 6-digit token by default; allow the range GoTrue can issue.
 const CODE_RE = /^\d{4,8}$/;
+// Segmented code entry: one box per digit, up to the longest token GoTrue issues.
+const OTP_LENGTH = 8;
 
 /** Turn a Supabase auth error into something a person can act on. */
 function friendlyAuthError(err, fallback) {
@@ -98,6 +100,7 @@ export default function Login() {
   const [code, setCode] = useState("");
   const emailRef = useRef(null);
   const codeRef = useRef(null);
+  const codeRefs = useRef([]);
 
   async function signInWith(provider) {
     setError("");
@@ -168,6 +171,45 @@ export default function Login() {
     }
   }
 
+  // --- Segmented code entry: type/paste/navigate across the per-digit boxes. ---
+  function handleOtpChange(i, raw) {
+    const digit = raw.replace(/\D/g, "").slice(-1);
+    if (!digit) return;
+    const arr = code.split("");
+    arr[i] = digit;
+    setCode(arr.join("").slice(0, OTP_LENGTH));
+    if (error) setError("");
+    if (i < OTP_LENGTH - 1) codeRefs.current[i + 1]?.focus();
+  }
+
+  function handleOtpKeyDown(i, e) {
+    if (e.key === "Backspace") {
+      e.preventDefault();
+      const arr = code.split("");
+      if (arr[i]) {
+        arr[i] = "";
+        setCode(arr.join(""));
+      } else if (i > 0) {
+        arr[i - 1] = "";
+        setCode(arr.join(""));
+        codeRefs.current[i - 1]?.focus();
+      }
+    } else if (e.key === "ArrowLeft" && i > 0) {
+      codeRefs.current[i - 1]?.focus();
+    } else if (e.key === "ArrowRight" && i < OTP_LENGTH - 1) {
+      codeRefs.current[i + 1]?.focus();
+    }
+  }
+
+  function handleOtpPaste(e) {
+    e.preventDefault();
+    const text = (e.clipboardData.getData("text") || "").replace(/\D/g, "").slice(0, OTP_LENGTH);
+    if (!text) return;
+    setCode(text);
+    if (error) setError("");
+    codeRefs.current[Math.min(text.length, OTP_LENGTH - 1)]?.focus();
+  }
+
   /** Real anonymous session, so a visitor can use the whole app before deciding. */
   async function exploreAsGuest() {
     setError("");
@@ -233,21 +275,26 @@ export default function Login() {
                 <label htmlFor="login-code" className="sr-only">
                   Sign-in code
                 </label>
-                <input
-                  id="login-code"
-                  ref={codeRef}
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={8}
-                  placeholder="123456"
-                  value={code}
-                  onChange={(e) => {
-                    setCode(e.target.value.replace(/\D/g, ""));
-                    if (error) setError("");
-                  }}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3.5 py-2.5 text-center text-lg tracking-widest text-slate-100 placeholder:text-slate-600 placeholder:tracking-widest focus:border-pulse-500 focus:outline-none focus:ring-1 focus:ring-pulse-500"
-                />
+                <div className="mt-1.5 flex justify-between gap-1.5" onPaste={handleOtpPaste}>
+                  {Array.from({ length: OTP_LENGTH }).map((_, i) => (
+                    <input
+                      key={i}
+                      id={i === 0 ? "login-code" : undefined}
+                      ref={(el) => {
+                        codeRefs.current[i] = el;
+                        if (i === 0) codeRef.current = el;
+                      }}
+                      inputMode="numeric"
+                      autoComplete={i === 0 ? "one-time-code" : "off"}
+                      pattern="\d*"
+                      maxLength={1}
+                      value={code[i] || ""}
+                      onChange={(e) => handleOtpChange(i, e.target.value)}
+                      onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                      className="h-12 w-full min-w-0 rounded-lg border border-slate-700 bg-slate-800/80 text-center text-lg font-semibold text-slate-100 focus:border-pulse-500 focus:outline-none focus:ring-1 focus:ring-pulse-500"
+                    />
+                  ))}
+                </div>
                 <button
                   type="submit"
                   disabled={!!busy}
