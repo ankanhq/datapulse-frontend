@@ -11,6 +11,9 @@ export default function AccountMenu({ user, onSignOut }) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [username, setUsername] = useState("");
+  const [savingName, setSavingName] = useState(false);
   const ref = useRef(null);
 
   // Close the menu on outside click / Escape.
@@ -30,9 +33,10 @@ export default function AccountMenu({ user, onSignOut }) {
   }, []);
 
   function close() {
-    if (busy) return; // don't yank the menu out mid-deletion
+    if (busy || savingName) return; // don't yank the menu out mid-write
     setOpen(false);
     setConfirming(false);
+    setEditing(false);
     setError("");
   }
 
@@ -55,10 +59,38 @@ export default function AccountMenu({ user, onSignOut }) {
     }
   }
 
+  /** Persist the chosen name onto the Supabase user's metadata. */
+  async function saveUsername() {
+    const name = username.trim();
+    if (!name) {
+      setError("Enter a username.");
+      return;
+    }
+    setSavingName(true);
+    setError("");
+    try {
+      const { error: err } = await supabase.auth.updateUser({ data: { username: name } });
+      if (err) throw err;
+      setEditing(false); // AuthGate's onAuthStateChange (USER_UPDATED) refreshes the header
+    } catch (err) {
+      // A 5xx surfaces as a retryable fetch error whose message is the literal
+      // "{}", which is truthy and would be shown to the user as-is.
+      const msg = err?.message;
+      setError(!msg || msg === "{}" ? "Could not save your username." : msg);
+    } finally {
+      setSavingName(false);
+    }
+  }
+
   // Anonymous sessions have no email — name them plainly rather than rendering
-  // an empty label where an address would be.
+  // an empty label where an address would be. For everyone else prefer a chosen
+  // username, then whatever name the OAuth provider supplied, then the local
+  // part of the email; the raw address is the last resort.
   const guest = !!user?.is_anonymous;
-  const label = guest ? "Guest" : user?.email;
+  const meta = user?.user_metadata || {};
+  const emailName = user?.email ? user.email.split("@")[0] : "";
+  const displayName = meta.username || meta.full_name || meta.name || meta.user_name || emailName || "";
+  const label = guest ? "Guest" : displayName || user?.email;
 
   return (
     <div className="relative ml-auto" ref={ref}>
@@ -88,6 +120,9 @@ export default function AccountMenu({ user, onSignOut }) {
           <div className="border-b border-slate-800 px-4 py-3">
             <p className="text-xs text-slate-500">{guest ? "Exploring as" : "Signed in as"}</p>
             <p className="truncate text-sm text-slate-200" title={label}>{label}</p>
+            {!guest && displayName && user?.email && displayName !== user.email && (
+              <p className="truncate text-xs text-slate-500" title={user.email}>{user.email}</p>
+            )}
             {guest && (
               <p className="mt-1 text-xs text-amber-300/90">
                 Sign in to save your data — use the banner at the top of the page.
@@ -97,6 +132,70 @@ export default function AccountMenu({ user, onSignOut }) {
 
           {!confirming ? (
             <div className="p-1.5">
+              {/* Guests have no account to name — the banner asks them to sign in. */}
+              {!guest &&
+                (editing ? (
+                  <form
+                    className="px-1.5 py-1.5"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      saveUsername();
+                    }}
+                  >
+                    <label htmlFor="account-username" className="sr-only">
+                      Username
+                    </label>
+                    <input
+                      id="account-username"
+                      type="text"
+                      maxLength={32}
+                      placeholder="Your name"
+                      value={username}
+                      onChange={(e) => {
+                        setUsername(e.target.value);
+                        if (error) setError("");
+                      }}
+                      className="w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-pulse-500 focus:outline-none focus:ring-1 focus:ring-pulse-500"
+                    />
+                    {error && <p className="mt-1.5 text-xs text-red-400">{error}</p>}
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        type="submit"
+                        disabled={savingName}
+                        className="inline-flex flex-1 items-center justify-center rounded-md bg-pulse-500 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-pulse-600 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {savingName ? "Saving…" : "Save"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={savingName}
+                        onClick={() => {
+                          setEditing(false);
+                          setError("");
+                        }}
+                        className="rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:bg-slate-700 disabled:opacity-60"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setEditing(true);
+                      setUsername(meta.username || "");
+                      setError("");
+                    }}
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-200 transition hover:bg-slate-800"
+                  >
+                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    Edit username
+                  </button>
+                ))}
               <button
                 type="button"
                 role="menuitem"
