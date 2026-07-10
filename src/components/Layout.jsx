@@ -1,10 +1,12 @@
 import ColdStartBanner from "./ColdStartBanner";
 import AccountMenu from "./AccountMenu";
+import GuestBanner from "./GuestBanner";
 
 export default function Layout({ children, user = null, onSignOut = null }) {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <ColdStartBanner />
+      {user?.is_anonymous && <GuestBanner />}
       <header className="sticky top-0 z-10 border-b border-slate-800 bg-slate-900/80 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-4 sm:px-6">
           <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-pulse-500/20 text-pulse-400">

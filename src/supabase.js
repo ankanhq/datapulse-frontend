@@ -15,6 +15,10 @@ if (!url || !anonKey) {
   );
 }
 
+// Where every auth flow returns to: OAuth, the email magic link, and the
+// linkIdentity upgrade from a guest session. Shared so they can never drift.
+export const AUTH_REDIRECT_TO = "https://datapulse-frontend.vercel.app";
+
 export const supabase = createClient(url || "http://localhost", anonKey || "public-anon-key", {
   auth: {
     persistSession: true,

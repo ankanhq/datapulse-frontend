@@ -55,6 +55,11 @@ export default function AccountMenu({ user, onSignOut }) {
     }
   }
 
+  // Anonymous sessions have no email — name them plainly rather than rendering
+  // an empty label where an address would be.
+  const guest = !!user?.is_anonymous;
+  const label = guest ? "Guest" : user?.email;
+
   return (
     <div className="relative ml-auto" ref={ref}>
       <button
@@ -65,10 +70,10 @@ export default function AccountMenu({ user, onSignOut }) {
         aria-expanded={open}
       >
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-pulse-500/20 text-xs font-semibold uppercase text-pulse-300">
-          {(user?.email || "?").charAt(0)}
+          {(label || "?").charAt(0)}
         </span>
-        <span className="hidden max-w-[32vw] truncate sm:inline" title={user?.email}>
-          {user?.email}
+        <span className="hidden max-w-[32vw] truncate sm:inline" title={label}>
+          {label}
         </span>
         <svg viewBox="0 0 24 24" className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
@@ -81,8 +86,13 @@ export default function AccountMenu({ user, onSignOut }) {
           className="absolute right-0 z-20 mt-2 w-72 overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-xl shadow-black/50"
         >
           <div className="border-b border-slate-800 px-4 py-3">
-            <p className="text-xs text-slate-500">Signed in as</p>
-            <p className="truncate text-sm text-slate-200" title={user?.email}>{user?.email}</p>
+            <p className="text-xs text-slate-500">{guest ? "Exploring as" : "Signed in as"}</p>
+            <p className="truncate text-sm text-slate-200" title={label}>{label}</p>
+            {guest && (
+              <p className="mt-1 text-xs text-amber-300/90">
+                Sign in to save your data — use the banner at the top of the page.
+              </p>
+            )}
           </div>
 
           {!confirming ? (

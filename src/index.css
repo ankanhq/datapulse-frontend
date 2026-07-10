@@ -25,6 +25,28 @@
   .animate-logo-pulse {
     animation: logoPulse 3.4s ease-in-out infinite;
   }
+  /* Login backdrop: two large colour fields drifting slowly past each other.
+     Transform/opacity only, so it stays on the compositor and never janks. */
+  .animate-aurora {
+    animation: aurora 26s ease-in-out infinite;
+  }
+  .animate-aurora-slow {
+    animation: aurora 34s ease-in-out infinite reverse;
+  }
+  /* Evidence preview: the sparkline draws itself, then the pieces settle in. */
+  .animate-draw-line {
+    stroke-dasharray: 1;
+    animation: drawLine 1.4s cubic-bezier(0.65, 0, 0.35, 1) both;
+  }
+  .animate-area-in {
+    animation: fadeIn 1.2s 0.5s ease-out both;
+  }
+  .animate-dot-in {
+    animation: dotIn 0.4s 1.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  .animate-card-in {
+    animation: cardIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
 }
 
 @keyframes fadeIn {
@@ -73,12 +95,64 @@
   }
 }
 
-/* Respect users who prefer reduced motion. */
+@keyframes aurora {
+  0%,
+  100% {
+    transform: translate3d(-6%, -4%, 0) scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translate3d(6%, 5%, 0) scale(1.15);
+    opacity: 0.8;
+  }
+}
+
+@keyframes drawLine {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes dotIn {
+  from {
+    opacity: 0;
+    r: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes cardIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Respect users who prefer reduced motion. The preview's JS loop checks the
+   same query, so the card settles on its final numbers instead of cycling. */
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in,
   .animate-slide-in,
   .animate-rise-in,
-  .animate-logo-pulse {
+  .animate-logo-pulse,
+  .animate-aurora,
+  .animate-aurora-slow,
+  .animate-draw-line,
+  .animate-area-in,
+  .animate-dot-in,
+  .animate-card-in {
     animation: none;
+  }
+  .animate-draw-line {
+    stroke-dasharray: none;
   }
 }
