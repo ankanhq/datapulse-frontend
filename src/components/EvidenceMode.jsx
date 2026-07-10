@@ -48,6 +48,14 @@ function trustTone(t) {
   return "bg-rose-500/15 text-rose-300 border-rose-500/30";
 }
 
+// Vivid meter fill — same tiers as trustTone, but a solid gradient like the
+// login preview's, so the trust bar reads as a filled bar rather than a tint.
+function trustFill(t) {
+  if (t >= 70) return "bg-gradient-to-r from-emerald-500/70 to-emerald-400";
+  if (t >= 40) return "bg-gradient-to-r from-amber-500/70 to-amber-400";
+  return "bg-gradient-to-r from-rose-500/70 to-rose-400";
+}
+
 function Badge({ children, className = "" }) {
   return (
     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${className}`}>
@@ -200,7 +208,7 @@ function InsightCard({ insight, index = 0, onShowEvidence }) {
           </div>
           <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-800">
             <div
-              className={`h-full rounded-full border ${trustTone(insight.trust_score)}`}
+              className={`h-full rounded-full ${trustFill(insight.trust_score)}`}
               style={{ width: `${trustAnim}%` }}
             />
           </div>
