@@ -4,6 +4,7 @@ import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { fetchInsights, fetchRows, createReport } from "../api";
 import Spinner from "./Spinner";
 import useColdStart from "../useColdStart";
+import { useCountUp, Sparkline } from "./evidenceVisuals";
 
 // Evidence Mode — a trustworthy, evidence-backed data story. Every card here is
 // rendered straight from numbers the backend computed (insights.py); nothing is
@@ -55,14 +56,17 @@ function Badge({ children, className = "" }) {
   );
 }
 
-function ConfidenceBadge({ value }) {
+// `displayPct` lets a caller animate the number while the tone/label stay fixed
+// to the true value (so the badge colour doesn't flicker across tiers mid-count).
+function ConfidenceBadge({ value, displayPct }) {
   const t = confidenceTone(value);
+  const pct = displayPct ?? Math.round(value * 100);
   return (
     <Badge className={t.cls} aria-label={`${t.label}, ${Math.round(value * 100)} percent`}>
       <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.2">
         <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
-      {t.label} · {Math.round(value * 100)}%
+      {t.label} · {pct}%
     </Badge>
   );
 }
@@ -137,11 +141,30 @@ function MetricValue({ value }) {
   return <span className="text-slate-100">{fmt(value)}</span>;
 }
 
-function InsightCard({ insight, onShowEvidence }) {
+// Pick a numeric series to draw: an explicit `spark`, else the first array of
+// >=3 finite numbers among the supporting metrics. Null means "no chart".
+function sparkPoints(insight) {
+  const ok = (a) =>
+    Array.isArray(a) && a.length >= 3 && a.every((n) => typeof n === "number" && Number.isFinite(n));
+  if (ok(insight.spark)) return insight.spark;
+  for (const v of Object.values(insight.supporting_metrics || {})) {
+    if (ok(v)) return v;
+  }
+  return null;
+}
+
+function InsightCard({ insight, index = 0, onShowEvidence }) {
   const limitation = insight.is_limitation;
+  // Hooks run every render regardless of card type; the values are only shown
+  // for real (non-limitation) cards. useCountUp settles to the final number
+  // instantly under prefers-reduced-motion.
+  const trustAnim = useCountUp(insight.trust_score ?? 0, insight.id, 1400);
+  const confPct = Math.round(useCountUp((insight.confidence ?? 0) * 100, insight.id));
+  const points = limitation ? null : sparkPoints(insight);
   return (
     <article
-      className={`group rounded-2xl border p-4 backdrop-blur transition duration-200 hover:-translate-y-0.5 sm:p-5 ${
+      style={{ animationDelay: `${index * 60}ms` }}
+      className={`group animate-card-in rounded-2xl border p-4 backdrop-blur transition duration-200 hover:-translate-y-0.5 sm:p-5 ${
         limitation
           ? "border-slate-800 bg-slate-900/40"
           : "border-slate-700/70 bg-slate-900/60 shadow-lg shadow-black/20 hover:border-pulse-500/40"
@@ -154,7 +177,7 @@ function InsightCard({ insight, onShowEvidence }) {
             <Badge className="border-slate-600/40 bg-slate-700/30 text-slate-300">Limitation</Badge>
           ) : (
             <>
-              <ConfidenceBadge value={insight.confidence} />
+              <ConfidenceBadge value={insight.confidence} displayPct={confPct} />
               <TrustBadge value={insight.trust_score} />
             </>
           )}
@@ -162,6 +185,27 @@ function InsightCard({ insight, onShowEvidence }) {
       </div>
 
       <p className="text-sm leading-6 text-slate-300">{insight.explanation}</p>
+
+      {/* The preview's visual language, on the real numbers: an animated curve
+          when a series exists, then a trust meter that fills as it counts up. */}
+      {points && <Sparkline points={points} runKey={insight.id} />}
+
+      {!limitation && (
+        <div className="mt-3">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="uppercase tracking-wide text-slate-500">Trust score</span>
+            <span className="font-semibold tabular-nums text-slate-300">
+              {Math.round(trustAnim)}/100
+            </span>
+          </div>
+          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-800">
+            <div
+              className={`h-full rounded-full border ${trustTone(insight.trust_score)}`}
+              style={{ width: `${trustAnim}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {insight.why_it_matters && (
         <div className="mt-3 rounded-lg border border-slate-800 bg-slate-950/40 p-3">
@@ -588,8 +632,13 @@ export default function EvidenceMode({ dataset, columns, filters = [], filtersPa
                   <p className="text-xs text-slate-500">{section.blurb}</p>
                 </div>
                 <div className="grid gap-4 lg:grid-cols-2">
-                  {items.map((insight) => (
-                    <InsightCard key={insight.id} insight={insight} onShowEvidence={setDrawerInsight} />
+                  {items.map((insight, index) => (
+                    <InsightCard
+                      key={insight.id}
+                      insight={insight}
+                      index={index}
+                      onShowEvidence={setDrawerInsight}
+                    />
                   ))}
                 </div>
               </div>
