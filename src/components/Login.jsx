@@ -30,6 +30,12 @@ function friendlyAuthError(err, fallback) {
   if (/signups? not allowed|email.*not authorized/i.test(msg)) {
     return "That email isn't allowed to sign in to this project.";
   }
+  // A rejected sign-in code. GoTrue says "Token has expired or is invalid",
+  // which reads like an internal fault; the caller's wording is kinder and
+  // says what to do next.
+  if (/token has expired or is invalid|invalid.*(token|otp)|otp.*(expired|invalid)/i.test(msg)) {
+    return fallback;
+  }
   return msg || fallback;
 }
 
