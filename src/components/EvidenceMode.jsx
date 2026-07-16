@@ -12,10 +12,12 @@ import { useCountUp, Sparkline } from "./evidenceVisuals";
 // and the calculation behind it.
 
 const MODES = [
-  { id: "student", label: "Student" },
-  { id: "analyst", label: "Analyst" },
+  // Plain, non-technical audiences first; analyst/researcher (which add a
+  // technical clause to each explanation) come last.
   { id: "founder", label: "Founder" },
   { id: "manager", label: "Manager" },
+  { id: "student", label: "Student" },
+  { id: "analyst", label: "Analyst" },
   { id: "researcher", label: "Researcher" },
 ];
 
@@ -416,7 +418,7 @@ function EvidenceDrawer({ datasetId, filtersParam, insight, onClose, onHighlight
 }
 
 export default function EvidenceMode({ dataset, columns, filters = [], filtersParam, onHighlightInTable }) {
-  const [mode, setMode] = useState("analyst");
+  const [mode, setMode] = useState("founder");
   const [drawerInsight, setDrawerInsight] = useState(null);
   const [shareBusy, setShareBusy] = useState(false);
   const [shareUrl, setShareUrl] = useState("");
@@ -509,7 +511,7 @@ export default function EvidenceMode({ dataset, columns, filters = [], filtersPa
           <div className="flex flex-col items-end gap-2">
             <div>
               <label htmlFor="audience-mode" className="block text-[11px] font-medium uppercase tracking-wide text-slate-500">
-                Explain for
+                Explain like I'm a:
               </label>
               <select
                 id="audience-mode"
