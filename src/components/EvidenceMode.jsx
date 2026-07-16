@@ -163,6 +163,19 @@ function sparkPoints(insight) {
   return null;
 }
 
+// Split a plain-language takeaway from a single trailing technical parenthetical
+// (the analyst/researcher "(slope … R²…)" clause) so the sentence reads clean and
+// the stats render as a muted aside. Greedy main capture peels only the LAST
+// "(...)" — and only one with no nested parens — at the very end; mid-sentence
+// parentheticals like "(2,838 of 4,305)" stay in the takeaway. No trailing "(...)"
+// -> the whole string is the takeaway.
+function splitTakeaway(text) {
+  if (!text) return { main: "", aside: null };
+  const m = text.match(/^(.*\S)\s*(\([^()]*\))\s*$/s);
+  if (m) return { main: m[1], aside: m[2] };
+  return { main: text, aside: null };
+}
+
 function InsightCard({ insight, index = 0, onShowEvidence }) {
   const limitation = insight.is_limitation;
   // Hooks run every render regardless of card type; the values are only shown
@@ -171,6 +184,7 @@ function InsightCard({ insight, index = 0, onShowEvidence }) {
   const trustAnim = useCountUp(insight.trust_score ?? 0, insight.id, 1400);
   const confPct = Math.round(useCountUp((insight.confidence ?? 0) * 100, insight.id));
   const points = limitation ? null : sparkPoints(insight);
+  const takeaway = limitation ? null : splitTakeaway(insight.explanation);
   return (
     <article
       style={{ animationDelay: `${index * 60}ms` }}
@@ -194,7 +208,19 @@ function InsightCard({ insight, index = 0, onShowEvidence }) {
         </div>
       </div>
 
-      <p className="text-sm leading-6 text-slate-300">{insight.explanation}</p>
+      {/* Plain-language takeaway leads the card. Limitation cards keep the muted
+          paragraph (no band); every real card opens with the "What this means" hero. */}
+      {limitation ? (
+        <p className="text-sm leading-6 text-slate-300">{insight.explanation}</p>
+      ) : (
+        <div className="mt-1 rounded-md border-l-2 border-pulse-500/60 bg-pulse-500/5 px-3 py-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-pulse-300">What this means</p>
+          <p className="mt-1 text-[15px] font-medium leading-relaxed text-slate-50">{takeaway.main}</p>
+          {takeaway.aside && (
+            <p className="mt-1 text-xs text-slate-500">{takeaway.aside}</p>
+          )}
+        </div>
+      )}
 
       {/* The preview's visual language, on the real numbers: an animated curve
           when a series exists, then a trust meter that fills as it counts up. */}
