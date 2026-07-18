@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchReport } from "../api";
 import Spinner from "./Spinner";
+import { KeyTakeaways, splitTakeaway } from "./keyTakeaways";
 
 // Read-only render of a shared Evidence-Mode story (no editor: no tabs, no
 // audience switch, no live table). The proof travels with the report as the
@@ -43,8 +45,12 @@ function Badge({ children, className }) {
 
 function Card({ insight }) {
   const metrics = insight.supporting_metrics || {};
+  const { main, aside } = splitTakeaway(insight.explanation);
+  // Shared reports read clean by default: the trailing "(slope … R²…)" clause is
+  // tucked behind a "Show the math" toggle, mirroring the live dashboard.
+  const [showMath, setShowMath] = useState(false);
   return (
-    <article className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4 backdrop-blur sm:p-5">
+    <article id={`insight-${insight.id}`} className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4 backdrop-blur sm:p-5">
       <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
         <h4 className="text-base font-semibold text-slate-50">{insight.title}</h4>
         {!insight.is_limitation && (
@@ -54,7 +60,20 @@ function Card({ insight }) {
           </div>
         )}
       </div>
-      <p className="text-sm leading-6 text-slate-300">{insight.explanation}</p>
+      <p className="text-sm leading-6 text-slate-300">{main}</p>
+      {aside && (
+        <div className="mt-1">
+          <button
+            type="button"
+            onClick={() => setShowMath((v) => !v)}
+            aria-expanded={showMath}
+            className="text-xs text-slate-500 transition hover:text-pulse-300 focus:outline-none focus:text-pulse-300"
+          >
+            {showMath ? "Hide the math" : "Show the math"}
+          </button>
+          {showMath && <p className="mt-1 text-xs text-slate-500">{aside}</p>}
+        </div>
+      )}
       {insight.why_it_matters && (
         <div className="mt-3 rounded-lg border border-slate-800 bg-slate-950/40 p-3">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-pulse-300">Why this matters</p>
@@ -143,6 +162,10 @@ export default function ReportView({ token }) {
           <Chip label="Duplicate rows" value={report.data_quality?.duplicate_rows ?? 0} />
         </div>
       )}
+
+      {/* Same digest as the live dashboard. Old saved reports predate the
+          key_takeaways field, so KeyTakeaways falls back to the top_insights cards. */}
+      <KeyTakeaways report={report} />
 
       {SECTIONS.map((s) => {
         const items = byCategory[s.key];

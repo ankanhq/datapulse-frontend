@@ -5,6 +5,7 @@ import { fetchInsights, fetchRows, createReport } from "../api";
 import Spinner from "./Spinner";
 import useColdStart from "../useColdStart";
 import { useCountUp, Sparkline } from "./evidenceVisuals";
+import { KeyTakeaways, splitTakeaway } from "./keyTakeaways";
 
 // Evidence Mode — a trustworthy, evidence-backed data story. Every card here is
 // rendered straight from numbers the backend computed (insights.py); nothing is
@@ -163,19 +164,6 @@ function sparkPoints(insight) {
   return null;
 }
 
-// Split a plain-language takeaway from a single trailing technical parenthetical
-// (the analyst/researcher "(slope … R²…)" clause) so the sentence reads clean and
-// the stats render as a muted aside. Greedy main capture peels only the LAST
-// "(...)" — and only one with no nested parens — at the very end; mid-sentence
-// parentheticals like "(2,838 of 4,305)" stay in the takeaway. No trailing "(...)"
-// -> the whole string is the takeaway.
-function splitTakeaway(text) {
-  if (!text) return { main: "", aside: null };
-  const m = text.match(/^(.*\S)\s*(\([^()]*\))\s*$/s);
-  if (m) return { main: m[1], aside: m[2] };
-  return { main: text, aside: null };
-}
-
 function InsightCard({ insight, index = 0, onShowEvidence }) {
   const limitation = insight.is_limitation;
   // Hooks run every render regardless of card type; the values are only shown
@@ -185,8 +173,12 @@ function InsightCard({ insight, index = 0, onShowEvidence }) {
   const confPct = Math.round(useCountUp((insight.confidence ?? 0) * 100, insight.id));
   const points = limitation ? null : sparkPoints(insight);
   const takeaway = limitation ? null : splitTakeaway(insight.explanation);
+  // The trailing "(slope … R²…)" clause is hidden by default behind a per-card
+  // "Show the math" toggle so the plain takeaway leads uncluttered.
+  const [showMath, setShowMath] = useState(false);
   return (
     <article
+      id={`insight-${insight.id}`}
       style={{ animationDelay: `${index * 60}ms` }}
       className={`group animate-card-in rounded-2xl border p-4 backdrop-blur transition duration-200 hover:-translate-y-0.5 sm:p-5 ${
         limitation
@@ -217,7 +209,17 @@ function InsightCard({ insight, index = 0, onShowEvidence }) {
           <p className="text-[11px] font-semibold uppercase tracking-wide text-pulse-300">What this means</p>
           <p className="mt-1 text-[15px] font-medium leading-relaxed text-slate-50">{takeaway.main}</p>
           {takeaway.aside && (
-            <p className="mt-1 text-xs text-slate-500">{takeaway.aside}</p>
+            <div className="mt-1">
+              <button
+                type="button"
+                onClick={() => setShowMath((v) => !v)}
+                aria-expanded={showMath}
+                className="text-xs text-slate-500 transition hover:text-pulse-300 focus:outline-none focus:text-pulse-300"
+              >
+                {showMath ? "Hide the math" : "Show the math"}
+              </button>
+              {showMath && <p className="mt-1 text-xs text-slate-500">{takeaway.aside}</p>}
+            </div>
           )}
         </div>
       )}
@@ -643,6 +645,10 @@ export default function EvidenceMode({ dataset, columns, filters = [], filtersPa
               <p className="mt-2 text-sm leading-6 text-slate-400">{execCard.why_it_matters}</p>
             </div>
           )}
+
+          {/* Plain-language digest of the headline findings; each item jumps to its
+              card. Hidden automatically when there's nothing strong to surface. */}
+          <KeyTakeaways report={data} />
 
           {meaningfulCount === 0 && (
             <div className="rounded-2xl border border-amber-700/40 bg-amber-950/30 p-4 sm:p-5">
