@@ -201,7 +201,7 @@ function driverChartData(drivers) {
     labels: rows.map((d) => d.label),
     datasets: [
       {
-        label: "Delta",
+        label: "Change",
         data: rows.map((d) => d.delta),
         backgroundColor: rows.map((d) => (d.delta >= 0 ? "#1a85ff" : "#f97316")),
       },
@@ -226,7 +226,7 @@ function buildSummaryText({ metricTitle, contextLine, comparison, agg }) {
     "",
     `Baseline:  ${fmt(comparison.baseTotal, digits)}`,
     `Current:   ${fmt(comparison.currentTotal, digits)}`,
-    `Delta:     ${fmtSigned(comparison.delta, agg)} (${pct(comparison.delta, comparison.baseTotal)})`
+    `Change:    ${fmtSigned(comparison.delta, agg)} (${pct(comparison.delta, comparison.baseTotal)})`
   );
   if (comparison.positives.length || comparison.negatives.length) {
     lines.push("", "Top movers");
@@ -611,7 +611,7 @@ export default function CompareMode({ dataset, columns }) {
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard label="Baseline" value={fmt(comparison.baseTotal, agg === "count" ? 0 : 2)} />
                 <StatCard label="Current" value={fmt(comparison.currentTotal, agg === "count" ? 0 : 2)} />
-                <StatCard label="Delta" value={fmtSigned(comparison.delta, agg)} tone={deltaTone} />
+                <StatCard label="Difference" value={fmtSigned(comparison.delta, agg)} tone={deltaTone} />
                 <StatCard label="Change" value={pct(comparison.delta, comparison.baseTotal)} tone={deltaTone} />
               </div>
 
