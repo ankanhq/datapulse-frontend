@@ -618,7 +618,7 @@ export default function CompareMode({ dataset, columns }) {
               <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
                 <div className="rounded-lg border border-slate-800 bg-slate-950/30 p-3">
                   <div className="mb-3 flex items-center justify-between gap-3">
-                    <h3 className="font-semibold text-slate-100">Delta view</h3>
+                    <h3 className="font-semibold text-slate-100">Change view</h3>
                     {isLoading && <Spinner label="Comparing…" />}
                   </div>
                   <div className="h-64">
