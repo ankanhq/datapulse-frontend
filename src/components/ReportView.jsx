@@ -50,12 +50,16 @@ function Card({ insight }) {
   // tucked behind a "Show the math" toggle, mirroring the live dashboard.
   const [showMath, setShowMath] = useState(false);
   return (
-    <article id={`insight-${insight.id}`} className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4 backdrop-blur sm:p-5">
+    <article id={`insight-${insight.id}`} className="scroll-mt-24 rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4 backdrop-blur sm:p-5">
       <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
         <h4 className="text-base font-semibold text-slate-50">{insight.title}</h4>
         {!insight.is_limitation && (
           <div className="flex flex-wrap gap-1.5">
-            <Badge className={confTone(insight.confidence)}>{Math.round(insight.confidence * 100)}% confidence</Badge>
+            {metrics.rare_but_real ? (
+              <Badge className="bg-pulse-500/15 text-pulse-300 border-pulse-500/30">Rare but real</Badge>
+            ) : (
+              <Badge className={confTone(insight.confidence)}>{Math.round(insight.confidence * 100)}% confidence</Badge>
+            )}
             <Badge className={trustTone(insight.trust_score)}>Trust {insight.trust_score}/100</Badge>
           </div>
         )}

@@ -93,6 +93,22 @@ function TrustBadge({ value }) {
   );
 }
 
+
+// A real, extreme finding (e.g. one massive outlier) scores "low confidence"
+// because its effect touches few rows — but presenting that as "Low confidence
+// · 1%" reads as "probably wrong". The backend flags these with
+// supporting_metrics.rare_but_real; this badge says what it actually is.
+function RareButRealBadge() {
+  return (
+    <Badge className="bg-pulse-500/15 text-pulse-300 border-pulse-500/30" aria-label="Rare but real: an extreme value, confidently detected">
+      <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.2">
+        <path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.4L12 3z" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      Rare but real
+    </Badge>
+  );
+}
+
 // Small info popover explaining what Confidence and Trust mean, in plain words.
 function ScoreInfo() {
   const [open, setOpen] = useState(false);
@@ -180,7 +196,7 @@ function InsightCard({ insight, index = 0, onShowEvidence }) {
     <article
       id={`insight-${insight.id}`}
       style={{ animationDelay: `${index * 60}ms` }}
-      className={`group animate-card-in rounded-2xl border p-4 backdrop-blur transition duration-200 hover:-translate-y-0.5 sm:p-5 ${
+      className={`group animate-card-in scroll-mt-24 rounded-2xl border p-4 backdrop-blur transition duration-200 hover:-translate-y-0.5 sm:p-5 ${
         limitation
           ? "border-slate-800 bg-slate-900/40"
           : "border-slate-700/70 bg-slate-900/60 shadow-lg shadow-black/20 hover:border-pulse-500/40"
@@ -193,7 +209,11 @@ function InsightCard({ insight, index = 0, onShowEvidence }) {
             <Badge className="border-slate-600/40 bg-slate-700/30 text-slate-300">Limitation</Badge>
           ) : (
             <>
-              <ConfidenceBadge value={insight.confidence} displayPct={confPct} />
+              {insight.supporting_metrics?.rare_but_real ? (
+                <RareButRealBadge />
+              ) : (
+                <ConfidenceBadge value={insight.confidence} displayPct={confPct} />
+              )}
               <TrustBadge value={insight.trust_score} />
             </>
           )}
