@@ -27,8 +27,8 @@ const SECTIONS = [
   { key: "top_insights", title: "Top insights", blurb: "The most notable computed findings, ranked." },
   { key: "hidden_patterns", title: "Hidden patterns", blurb: "Concentration and trends the raw table hides." },
   { key: "what_changed_most", title: "What changed most", blurb: "Biggest movers between the earlier and later half." },
-  { key: "anomalies", title: "Anomalies", blurb: "Outliers flagged by the 1.5×IQR fence." },
-  { key: "correlations", title: "Correlations", blurb: "Pairwise Pearson relationships between numbers." },
+  { key: "anomalies", title: "Anomalies", blurb: "Values that sit far outside the normal range." },
+  { key: "correlations", title: "Correlations", blurb: "Which number columns move together — and which don't." },
   { key: "missing_data", title: "Data completeness", blurb: "Where values are missing and how much." },
 ];
 
