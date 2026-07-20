@@ -57,10 +57,12 @@ function Card({ insight }) {
           <div className="flex flex-wrap gap-1.5">
             {metrics.rare_but_real ? (
               <Badge className="bg-pulse-500/15 text-pulse-300 border-pulse-500/30">Rare but real</Badge>
+            ) : metrics.all_clear ? (
+              <Badge className="bg-emerald-500/15 text-emerald-300 border-emerald-500/30">All clear</Badge>
             ) : (
               <Badge className={confTone(insight.confidence)}>{Math.round(insight.confidence * 100)}% confidence</Badge>
             )}
-            <Badge className={trustTone(insight.trust_score)}>Trust {insight.trust_score}/100</Badge>
+            <Badge className={metrics.all_clear ? "bg-slate-500/15 text-slate-300 border-slate-500/30" : trustTone(insight.trust_score)}>Trust {insight.trust_score}/100</Badge>
           </div>
         )}
       </div>

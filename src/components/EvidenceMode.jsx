@@ -82,9 +82,9 @@ function ConfidenceBadge({ value, displayPct }) {
   );
 }
 
-function TrustBadge({ value }) {
+function TrustBadge({ value, neutral = false }) {
   return (
-    <Badge className={trustTone(value)} aria-label={`Trust score ${value} out of 100`}>
+    <Badge className={neutral ? "bg-slate-500/15 text-slate-300 border-slate-500/30" : trustTone(value)} aria-label={`Trust score ${value} out of 100`}>
       <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.2">
         <path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
@@ -105,6 +105,22 @@ function RareButRealBadge() {
         <path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.4L12 3z" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
       Rare but real
+    </Badge>
+  );
+}
+
+// An honest "no relationship found" is a completed check that carries a LOW
+// effect-scaled trust score — styled like a failing card it reads as "this
+// claim is wrong". The backend flags these with supporting_metrics.all_clear;
+// this badge says what the card actually is: a check that came back clean.
+function AllClearBadge() {
+  return (
+    <Badge className="bg-emerald-500/15 text-emerald-300 border-emerald-500/30" aria-label="All clear: this check found nothing to worry about">
+      <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.2">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M8.5 12.5l2.5 2.5 4.5-5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      All clear
     </Badge>
   );
 }
@@ -189,6 +205,7 @@ function InsightCard({ insight, index = 0, onShowEvidence }) {
   const confPct = Math.round(useCountUp((insight.confidence ?? 0) * 100, insight.id));
   const points = limitation ? null : sparkPoints(insight);
   const takeaway = limitation ? null : splitTakeaway(insight.explanation);
+  const allClear = !limitation && !!insight.supporting_metrics?.all_clear;
   // The trailing "(slope … R²…)" clause is hidden by default behind a per-card
   // "Show the math" toggle so the plain takeaway leads uncluttered.
   const [showMath, setShowMath] = useState(false);
@@ -211,10 +228,12 @@ function InsightCard({ insight, index = 0, onShowEvidence }) {
             <>
               {insight.supporting_metrics?.rare_but_real ? (
                 <RareButRealBadge />
+              ) : insight.supporting_metrics?.all_clear ? (
+                <AllClearBadge />
               ) : (
                 <ConfidenceBadge value={insight.confidence} displayPct={confPct} />
               )}
-              <TrustBadge value={insight.trust_score} />
+              <TrustBadge value={insight.trust_score} neutral={!!insight.supporting_metrics?.all_clear} />
             </>
           )}
         </div>
@@ -258,7 +277,7 @@ function InsightCard({ insight, index = 0, onShowEvidence }) {
           </div>
           <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-800">
             <div
-              className={`h-full rounded-full ${trustFill(insight.trust_score)}`}
+              className={`h-full rounded-full ${allClear ? "bg-gradient-to-r from-slate-500/70 to-slate-400" : trustFill(insight.trust_score)}`}
               style={{ width: `${trustAnim}%` }}
             />
           </div>
